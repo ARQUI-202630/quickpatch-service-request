@@ -71,6 +71,7 @@ public static class AuthenticationSetup
 
         services.AddAuthorizationBuilder()
             .AddPolicy(AuthenticatedUser.ClientPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole));
+        services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, ForbiddenAuditHandler>();
 
         return services;
     }
