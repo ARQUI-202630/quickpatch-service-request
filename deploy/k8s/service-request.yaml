@@ -1,0 +1,100 @@
+# Despliegue de ServiceRequest en k3s (namespace quickpatch), igual en QA y producción.
+# Primer despliegue: crear el Secret service-request-secretos (deploy/k8s/README.md), reemplazar <vm-mensajeria> por la IP de
+# Kafka del ambiente y aplicar este archivo con `kubectl apply -f deploy/k8s/service-request.yaml`.
+# Después, el pipeline actualiza la imagen con `kubectl set image deployment/service-request "*=<imagen>"`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-request-config
+  namespace: quickpatch
+  labels: { app: service-request }
+data:
+  Jwt__Issuer: "quickpatch-identity"
+  Jwt__Audience: "quickpatch"
+  Kafka__BootstrapServers: "<vm-mensajeria>:9092"
+  Outbox__PublisherRole: "service_request_outbox"
+  Kafka__ConsumerGroupId: "service-request-service"
+  Coverage__MinLatitude: "4.45"
+  Coverage__MaxLatitude: "4.85"
+  Coverage__MinLongitude: "-74.25"
+  Coverage__MaxLongitude: "-73.98"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-request
+  namespace: quickpatch
+  labels: { app: service-request }
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels: { app: service-request }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app: service-request }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      initContainers:
+        # Migraciones (EF Core bundle) con el rol service_request_migrator, dueño de las tablas (DD 10.2).
+        - name: migraciones
+          image: ghcr.io/arqui-202630/quickpatch-service-request:pendiente
+          command: ["/app/efbundle", "--connection", "$(MIGRATOR_CONNECTION)"]
+          env:
+            - name: MIGRATOR_CONNECTION
+              valueFrom: { secretKeyRef: { name: service-request-secretos, key: migrator-connection } }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+      containers:
+        - name: service-request
+          image: ghcr.io/arqui-202630/quickpatch-service-request:pendiente
+          ports:
+            - { name: http, containerPort: 8080 }
+          envFrom:
+            - configMapRef: { name: service-request-config }
+          env:
+            - name: ConnectionStrings__ServiceRequest
+              valueFrom: { secretKeyRef: { name: service-request-secretos, key: app-connection } }
+            - name: Jwt__PublicKeyPem
+              valueFrom: { secretKeyRef: { name: service-request-secretos, key: jwt-public-key } }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          # Pendiente de medición (Documento de Infraestructura, 5.6); límite inicial dentro del presupuesto de VM3.
+          resources:
+            requests: { cpu: 100m, memory: 160Mi }
+            limits: { cpu: 500m, memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-request
+  namespace: quickpatch
+  labels: { app: service-request }
+spec:
+  selector: { app: service-request }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+# El gateway quita /api y reenvía a Traefik (NodePort 30080); Traefik elige el servicio por la ruta del contrato.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: service-request
+  namespace: quickpatch
+spec:
+  rules:
+    - http:
+        paths:
+          - { path: C:/Program Files/Git/v1/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
