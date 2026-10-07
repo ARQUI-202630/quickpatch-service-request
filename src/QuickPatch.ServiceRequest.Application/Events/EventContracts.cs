@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace QuickPatch.ServiceRequest.Application.Events;
 
 /// <summary>
-/// Sobre común de los eventos (DD, sección 8.2.1; <c>quickpatch-contracts/events</c>).
+/// Sobre común de los eventos (DD, sección 8.2.1; <c>quickpatch-kafka/events</c>).
 /// </summary>
 public sealed record EventEnvelope<TData>(
     Guid EventId,
