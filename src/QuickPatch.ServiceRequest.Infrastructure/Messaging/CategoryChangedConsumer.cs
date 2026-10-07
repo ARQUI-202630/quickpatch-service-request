@@ -14,7 +14,8 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Messaging;
 /// <summary>
 /// Consumidor de <c>catalog.category-changed</c> v1. Confirma el offset solo después de aplicar el evento;
 /// si el procesamiento falla, vuelve a leer el mismo mensaje. Un mensaje que no cumple el contrato se registra
-/// y se salta, para no bloquear la partición.
+/// y se salta, para no bloquear la partición. Un error de lectura no fatal (por ejemplo, el topic aún no existe)
+/// se reintenta sin detener el servicio.
 /// </summary>
 public sealed partial class CategoryChangedConsumer(
     IServiceScopeFactory scopes,
@@ -31,7 +32,20 @@ public sealed partial class CategoryChangedConsumer(
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                var result = consumer.Consume(TimeSpan.FromSeconds(1));
+                ConsumeResult<string, string>? result;
+                try
+                {
+                    result = consumer.Consume(TimeSpan.FromSeconds(1));
+                }
+                catch (ConsumeException ex) when (!ex.Error.IsFatal)
+                {
+                    // Por ejemplo, el topic todavía no existe porque Catalog no ha publicado: se espera y se
+                    // reintenta, en lugar de detener el servicio (AC5; hallazgo de POC-BE-001).
+                    LogConsumeFailed(logger, ex.Error.Reason, ex);
+                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    continue;
+                }
+
                 if (result is null)
                 {
                     continue;
@@ -94,6 +108,9 @@ public sealed partial class CategoryChangedConsumer(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Mensaje de catalog.category-changed que no cumple el contrato; se descarta.")]
     private static partial void LogInvalidMessage(ILogger logger, Exception? exception);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No se pudo leer de catalog.category-changed ({Reason}); se reintentará.")]
+    private static partial void LogConsumeFailed(ILogger logger, string reason, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Falló el procesamiento del evento {EventId}; se reintentará.")]
     private static partial void LogProcessingFailed(ILogger logger, Guid eventId, Exception exception);
