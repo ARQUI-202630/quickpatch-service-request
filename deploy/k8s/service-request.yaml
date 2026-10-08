@@ -100,4 +100,4 @@ spec:
   rules:
     - http:
         paths:
-          - { path: C:/Program Files/Git/v1/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
+          - { path: /v1/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
