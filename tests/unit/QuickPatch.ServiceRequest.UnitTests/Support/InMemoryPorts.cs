@@ -40,6 +40,9 @@ public sealed class InMemoryStore :
 
     public void Add(DomainServiceRequest serviceRequest) => ServiceRequests.Add(serviceRequest);
 
+    public Task<DomainServiceRequest?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(ServiceRequests.SingleOrDefault(x => x.Id == id));
+
     public Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken) =>
         Task.FromResult(ServiceRequests.SingleOrDefault(x => x.TenantId == currentTenant && x.Id == id && x.ClientId == clientId));
 

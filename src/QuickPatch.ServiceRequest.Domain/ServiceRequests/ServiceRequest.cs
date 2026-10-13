@@ -52,6 +52,12 @@ public sealed class ServiceRequest
     public DateTimeOffset CreatedAt { get; }
 
     /// <summary>
+    /// <c>occurredAt</c> del último evento de Matching aplicado. Los eventos de Matching llegan por topics distintos
+    /// y pueden llegar en otro orden; uno más viejo que este se descarta (ADR-017).
+    /// </summary>
+    public DateTimeOffset? MatchingUpdatedAt { get; private set; }
+
+    /// <summary>
     /// Crea una solicitud en estado <c>buscando_tecnico</c> (RF-07), validando RN-SR1 y RN-SR11.
     /// La cobertura (RN-SR9) y la categoría (RN-SR10) las valida el caso de uso.
     /// </summary>
@@ -105,6 +111,40 @@ public sealed class ServiceRequest
 
         return new ServiceRequest(
             Guid.CreateVersion7(createdAt), tenantId, clientId, categoryId, descripcion, location!, direccion, createdAt);
+    }
+
+    /// <summary>
+    /// <c>matching.no-technician-available</c>: <c>buscando_tecnico</c> pasa a <c>en_espera</c> (DD 7.4, RN-M4).
+    /// </summary>
+    public MatchingEventOutcome ApplyNoTechnicianAvailable(DateTimeOffset occurredAt) =>
+        ApplyMatchingEvent(occurredAt, ServiceRequestStatus.BuscandoTecnico, ServiceRequestStatus.EnEspera);
+
+    /// <summary>
+    /// <c>matching.search-resumed</c>: <c>en_espera</c> vuelve a <c>buscando_tecnico</c> (DD 7.4, RN-M10).
+    /// </summary>
+    public MatchingEventOutcome ApplySearchResumed(DateTimeOffset occurredAt) =>
+        ApplyMatchingEvent(occurredAt, ServiceRequestStatus.EnEspera, ServiceRequestStatus.BuscandoTecnico);
+
+    /// <summary>
+    /// Aplica la transición si el evento es más reciente que el último de Matching y la solicitud está en el estado
+    /// de origen. Un evento reciente que no corresponde al estado (por ejemplo, la solicitud ya se canceló) no cambia
+    /// el estado, pero sí la versión: así un evento más viejo que llegue después tampoco lo cambia.
+    /// </summary>
+    private MatchingEventOutcome ApplyMatchingEvent(DateTimeOffset occurredAt, string from, string to)
+    {
+        if (MatchingUpdatedAt is { } last && occurredAt <= last)
+        {
+            return MatchingEventOutcome.Stale;
+        }
+
+        MatchingUpdatedAt = occurredAt;
+        if (Status != from)
+        {
+            return MatchingEventOutcome.Ignored;
+        }
+
+        Status = to;
+        return MatchingEventOutcome.Applied;
     }
 
     /// <summary>Reconstruye una solicitud persistida; lo usa el repositorio.</summary>

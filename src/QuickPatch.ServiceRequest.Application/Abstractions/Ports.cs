@@ -19,6 +19,9 @@ public interface IServiceRequestRepository
 {
     void Add(DomainServiceRequest serviceRequest);
 
+    /// <summary>Busca la solicitud en el tenant de la transacción para modificarla; null si no existe.</summary>
+    Task<DomainServiceRequest?> FindByIdAsync(Guid id, CancellationToken cancellationToken);
+
     /// <summary>Busca la solicitud del cliente; devuelve null si no existe o es de otro cliente.</summary>
     Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken);
 }

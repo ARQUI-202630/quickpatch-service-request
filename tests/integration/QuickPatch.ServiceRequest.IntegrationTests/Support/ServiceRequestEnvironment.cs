@@ -62,6 +62,8 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
         [
             new TopicSpecification { Name = "service-request.created", NumPartitions = 1, ReplicationFactor = 1 },
             new TopicSpecification { Name = "catalog.category-changed", NumPartitions = 1, ReplicationFactor = 1 },
+            new TopicSpecification { Name = "matching.no-technician-available", NumPartitions = 1, ReplicationFactor = 1 },
+            new TopicSpecification { Name = "matching.search-resumed", NumPartitions = 1, ReplicationFactor = 1 },
         ]);
 
         App = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>

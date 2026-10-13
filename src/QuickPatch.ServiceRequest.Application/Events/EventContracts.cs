@@ -30,10 +30,18 @@ public sealed record EventLocation(double Latitude, double Longitude);
 /// <summary><c>data</c> de <c>catalog.category-changed</c> v1.</summary>
 public sealed record CategoryChangedData(Guid CategoryId, string Name, bool Active, DateTimeOffset UpdatedAt);
 
+/// <summary><c>data</c> de <c>matching.no-technician-available</c> v1.</summary>
+public sealed record NoTechnicianAvailableData(Guid ServiceRequestId, Guid ClientId, int AttemptsCount);
+
+/// <summary><c>data</c> de <c>matching.search-resumed</c> v1.</summary>
+public sealed record SearchResumedData(Guid ServiceRequestId, Guid ClientId, string Trigger);
+
 public static class EventTypes
 {
     public const string ServiceRequestCreated = "service-request.created";
     public const string CategoryChanged = "catalog.category-changed";
+    public const string NoTechnicianAvailable = "matching.no-technician-available";
+    public const string SearchResumed = "matching.search-resumed";
     public const string Producer = "service-request-service";
 }
 
