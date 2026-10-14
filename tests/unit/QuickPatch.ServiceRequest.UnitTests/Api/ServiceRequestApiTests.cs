@@ -21,6 +21,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public InMemoryStore Store { get; } = new();
 
+    public FakeUserDirectory Directory { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
@@ -33,6 +35,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<ICategoryReplicaRepository>(Store);
             services.AddSingleton<IProcessedEventRepository>(Store);
             services.AddSingleton<IOutbox>(Store);
+            services.AddSingleton<IUserDirectory>(Directory);
             services.Configure<HealthCheckServiceOptions>(o => o.Registrations.Clear());
         });
     }

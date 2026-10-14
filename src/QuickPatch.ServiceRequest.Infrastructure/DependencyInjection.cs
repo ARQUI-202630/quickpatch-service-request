@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
+using QuickPatch.ServiceRequest.Infrastructure.Identity;
 using QuickPatch.ServiceRequest.Infrastructure.Messaging;
 using QuickPatch.ServiceRequest.Infrastructure.Options;
 using QuickPatch.ServiceRequest.Infrastructure.Persistence;
@@ -30,6 +31,18 @@ public static class DependencyInjection
         services.Configure<CoverageOptions>(configuration.GetSection(CoverageOptions.Section));
         services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.Section));
         services.Configure<OutboxOptions>(configuration.GetSection(OutboxOptions.Section));
+
+        // Consulta interna por lote a Identity (identity-internal.v1.yaml, DD V4 8.3.4).
+        var identity = configuration.GetSection(IdentityOptions.Section).Get<IdentityOptions>() ?? new IdentityOptions();
+        services.AddHttpClient<IUserDirectory, IdentityUserDirectory>(http =>
+        {
+            if (!string.IsNullOrWhiteSpace(identity.BaseUrl))
+            {
+                http.BaseAddress = new Uri(identity.BaseUrl.TrimEnd('/') + "/");
+            }
+
+            http.Timeout = identity.Timeout;
+        });
 
         services.AddSingleton(sp =>
         {

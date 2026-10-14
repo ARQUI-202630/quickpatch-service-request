@@ -17,6 +17,10 @@ public sealed record AuthenticatedUser(Guid UserId, Guid TenantId, string Role)
     public const string RoleClaim = "role";
     public const string ClientRole = "cliente";
     public const string ClientPolicy = "SoloCliente";
+    public const string TechnicianRole = "tecnico";
+
+    /// <summary>Consulta del detalle (contrato 1.1.0): el cliente dueño y el técnico asignado.</summary>
+    public const string ReadPolicy = "ClienteOTecnico";
 
     public static bool TryFrom(ClaimsPrincipal principal, out AuthenticatedUser user)
     {
@@ -70,7 +74,8 @@ public static class AuthenticationSetup
             });
 
         services.AddAuthorizationBuilder()
-            .AddPolicy(AuthenticatedUser.ClientPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole));
+            .AddPolicy(AuthenticatedUser.ClientPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole))
+            .AddPolicy(AuthenticatedUser.ReadPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.TechnicianRole));
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, ForbiddenAuditHandler>();
 
         return services;

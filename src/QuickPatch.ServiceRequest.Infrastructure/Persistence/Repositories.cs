@@ -42,6 +42,9 @@ public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServ
 
     public Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken) =>
         db.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ClientId == clientId, cancellationToken);
+
+    public Task<DomainServiceRequest?> FindForTechnicianAsync(Guid id, Guid technicianId, CancellationToken cancellationToken) =>
+        db.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.TechnicianId == technicianId, cancellationToken);
 }
 
 public sealed class CategoryReplicaRepository(ServiceRequestDbContext db) : ICategoryReplicaRepository

@@ -41,6 +41,9 @@ public sealed class ServiceRequest
 
     public Guid? TechnicianId { get; private set; }
 
+    /// <summary>Momento en que el técnico aceptó la oferta (<c>matching.technician-assigned</c>); null antes.</summary>
+    public DateTimeOffset? AssignedAt { get; private set; }
+
     public string Description { get; }
 
     public GeoPoint Location { get; }
@@ -114,6 +117,32 @@ public sealed class ServiceRequest
     }
 
     /// <summary>
+    /// <c>matching.technician-assigned</c>: <c>buscando_tecnico</c> pasa a <c>asignado</c> con el técnico y la hora de
+    /// asignación (DD 7.4, SCRUM-91).
+    /// </summary>
+    public MatchingEventOutcome ApplyTechnicianAssigned(Guid technicianId, DateTimeOffset assignedAt, DateTimeOffset occurredAt)
+    {
+        var outcome = ApplyMatchingEvent(occurredAt, ServiceRequestStatus.BuscandoTecnico, ServiceRequestStatus.Asignado);
+        if (outcome == MatchingEventOutcome.Applied)
+        {
+            TechnicianId = technicianId;
+            AssignedAt = assignedAt;
+        }
+
+        return outcome;
+    }
+
+    /// <summary>
+    /// Estados en los que el técnico asignado ve la solicitud con la dirección y el contacto del cliente
+    /// (RN-SR13): de <c>asignado</c> a <c>completado</c>.
+    /// </summary>
+    public bool IsVisibleToAssignedTechnician => Status is ServiceRequestStatus.Asignado
+        or ServiceRequestStatus.Cotizado
+        or ServiceRequestStatus.CotizacionAceptada
+        or ServiceRequestStatus.EnProgreso
+        or ServiceRequestStatus.Completado;
+
+    /// <summary>
     /// <c>matching.no-technician-available</c>: <c>buscando_tecnico</c> pasa a <c>en_espera</c> (DD 7.4, RN-M4).
     /// </summary>
     public MatchingEventOutcome ApplyNoTechnicianAvailable(DateTimeOffset occurredAt) =>
@@ -158,10 +187,12 @@ public sealed class ServiceRequest
         GeoPoint location,
         string addressText,
         string status,
-        DateTimeOffset createdAt) =>
+        DateTimeOffset createdAt,
+        DateTimeOffset? assignedAt = null) =>
         new(id, tenantId, clientId, categoryId, description, location, addressText, createdAt)
         {
             TechnicianId = technicianId,
             Status = status,
+            AssignedAt = assignedAt,
         };
 }

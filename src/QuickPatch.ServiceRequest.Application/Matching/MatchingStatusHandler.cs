@@ -27,8 +27,8 @@ public enum MatchingEventHandlingOutcome
 }
 
 /// <summary>
-/// Consumidor de los eventos de Matching que cambian el estado de la solicitud (DD 7.4): sin técnicos pasa a
-/// <c>en_espera</c> y al reanudarse vuelve a <c>buscando_tecnico</c>. Es idempotente por <c>eventId</c> y aplica
+/// Consumidor de los eventos de Matching que cambian el estado de la solicitud (DD 7.4): con técnico pasa a
+/// <c>asignado</c>, sin técnicos pasa a <c>en_espera</c> y al reanudarse vuelve a <c>buscando_tecnico</c>. Es idempotente por <c>eventId</c> y aplica
 /// el cambio bajo el tenant del evento (DD 10.3), así que una solicitud de otro tenant no se encuentra.
 /// </summary>
 public sealed partial class MatchingStatusHandler(
@@ -38,6 +38,15 @@ public sealed partial class MatchingStatusHandler(
     TimeProvider clock,
     ILogger<MatchingStatusHandler> logger)
 {
+    public Task<MatchingEventHandlingOutcome> HandleTechnicianAssignedAsync(
+        EventEnvelope<TechnicianAssignedData> envelope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+        return ApplyAsync(envelope.EventId, envelope.TenantId, envelope.EventType, envelope.Data.ServiceRequestId,
+            request => request.ApplyTechnicianAssigned(envelope.Data.TechnicianId, envelope.Data.AssignedAt, envelope.OccurredAt),
+            cancellationToken);
+    }
+
     public Task<MatchingEventHandlingOutcome> HandleNoTechnicianAvailableAsync(
         EventEnvelope<NoTechnicianAvailableData> envelope, CancellationToken cancellationToken)
     {

@@ -40,11 +40,13 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
 
     public string KafkaServers => kafka.GetBootstrapAddress();
 
+    public FakeIdentityServer Identity { get; } = new();
+
     public WebApplicationFactory<Program> App { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), kafka.StartAsync());
+        await Task.WhenAll(postgres.StartAsync(), kafka.StartAsync(), Identity.StartAsync());
 
         var options = new DbContextOptionsBuilder<ServiceRequestDbContext>()
             .UseNpgsql(AdminConnectionString, n => n.UseNetTopologySuite())
@@ -62,6 +64,7 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
         [
             new TopicSpecification { Name = "service-request.created", NumPartitions = 1, ReplicationFactor = 1 },
             new TopicSpecification { Name = "catalog.category-changed", NumPartitions = 1, ReplicationFactor = 1 },
+            new TopicSpecification { Name = "matching.technician-assigned", NumPartitions = 1, ReplicationFactor = 1 },
             new TopicSpecification { Name = "matching.no-technician-available", NumPartitions = 1, ReplicationFactor = 1 },
             new TopicSpecification { Name = "matching.search-resumed", NumPartitions = 1, ReplicationFactor = 1 },
         ]);
@@ -73,6 +76,7 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
             builder.UseSetting("Outbox:PublisherRole", "service_request_outbox");
             builder.UseSetting("Outbox:PollInterval", "00:00:00.200");
             builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
+            builder.UseSetting("Identity:BaseUrl", Identity.BaseUrl);
         });
         _ = App.Server;
     }
@@ -84,7 +88,7 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
             await App.DisposeAsync();
         }
 
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), kafka.DisposeAsync().AsTask());
+        await Task.WhenAll(postgres.DisposeAsync().AsTask(), kafka.DisposeAsync().AsTask(), Identity.DisposeAsync().AsTask());
     }
 
     public async Task ExecuteAdminAsync(string sql)
