@@ -18,6 +18,9 @@ data:
   Coverage__MaxLatitude: "4.85"
   Coverage__MinLongitude: "-74.25"
   Coverage__MaxLongitude: "-73.98"
+  # Consulta interna por lote de nombres (identity-internal.v1.yaml); por el Service de k8s, sin pasar por el gateway.
+  Identity__BaseUrl: "http://identity.quickpatch.svc.cluster.local:8080"
+  Identity__Timeout: "00:00:02"
 ---
 apiVersion: apps/v1
 kind: Deployment

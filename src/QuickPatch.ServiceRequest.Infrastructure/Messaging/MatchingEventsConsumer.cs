@@ -13,7 +13,7 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Messaging;
 
 /// <summary>
 /// Consumidor de los eventos de Matching que cambian el estado de la solicitud (DD 7.4):
-/// <c>matching.no-technician-available</c> y <c>matching.search-resumed</c> v1. Igual que
+/// <c>matching.technician-assigned</c>, <c>matching.no-technician-available</c> y <c>matching.search-resumed</c> v1. Igual que
 /// <see cref="CategoryChangedConsumer"/>: confirma el offset solo después de aplicar el evento, descarta el mensaje
 /// que no cumple el contrato y reintenta los errores de lectura no fatales. Para sumar otro evento de Matching (por
 /// ejemplo <c>matching.technician-assigned</c>) basta con agregarlo a <see cref="Topics"/> y a <see cref="DispatchAsync"/>.
@@ -23,7 +23,7 @@ public sealed partial class MatchingEventsConsumer(
     IConsumer<string, string> consumer,
     ILogger<MatchingEventsConsumer> logger) : BackgroundService
 {
-    public static readonly string[] Topics = [EventTypes.NoTechnicianAvailable, EventTypes.SearchResumed];
+    public static readonly string[] Topics = [EventTypes.TechnicianAssigned, EventTypes.NoTechnicianAvailable, EventTypes.SearchResumed];
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
         Task.Factory.StartNew(() => ConsumeLoopAsync(stoppingToken), stoppingToken, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
@@ -117,6 +117,17 @@ public sealed partial class MatchingEventsConsumer(
     {
         switch (envelope.EventType)
         {
+            case EventTypes.TechnicianAssigned:
+                var assigned = envelope.Data.Deserialize<TechnicianAssignedData>(EventSerializer.Options);
+                if (assigned is null || assigned.ServiceRequestId == Guid.Empty || assigned.TechnicianId == Guid.Empty)
+                {
+                    LogInvalidMessage(logger, null);
+                    return true;
+                }
+
+                await handler.HandleTechnicianAssignedAsync(Typed(envelope, assigned), cancellationToken);
+                return true;
+
             case EventTypes.NoTechnicianAvailable:
                 var noTechnician = envelope.Data.Deserialize<NoTechnicianAvailableData>(EventSerializer.Options);
                 if (noTechnician is null || noTechnician.ServiceRequestId == Guid.Empty)

@@ -113,12 +113,14 @@ public class CreateServiceRequestHandlerTests
     {
         store.Categories.Add(new CategoryReplica(category, tenant, "Plomería", true, Now));
         var created = (CreateServiceRequestResult.Created)await Handler().HandleAsync(Command(), CancellationToken.None);
-        var get = new GetServiceRequestHandler(store, store);
+        var get = new GetServiceRequestHandler(store, store, new FakeUserDirectory());
         var id = created.ServiceRequest.Id;
 
-        Assert.NotNull(await get.HandleAsync(tenant, client, id, CancellationToken.None));
-        Assert.Null(await get.HandleAsync(Guid.NewGuid(), client, id, CancellationToken.None));
-        Assert.Null(await get.HandleAsync(tenant, Guid.NewGuid(), id, CancellationToken.None));
+        ServiceRequestViewer Viewer(Guid t, Guid user) => new(user, t, "cliente", "token", correlation);
+
+        Assert.IsType<GetServiceRequestResult.Found>(await get.HandleAsync(Viewer(tenant, client), id, CancellationToken.None));
+        Assert.IsType<GetServiceRequestResult.NotFound>(await get.HandleAsync(Viewer(Guid.NewGuid(), client), id, CancellationToken.None));
+        Assert.IsType<GetServiceRequestResult.NotFound>(await get.HandleAsync(Viewer(tenant, Guid.NewGuid()), id, CancellationToken.None));
     }
 }
 

@@ -41,10 +41,13 @@ public sealed class InMemoryStore :
     public void Add(DomainServiceRequest serviceRequest) => ServiceRequests.Add(serviceRequest);
 
     public Task<DomainServiceRequest?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
-        Task.FromResult(ServiceRequests.SingleOrDefault(x => x.Id == id));
+        Task.FromResult(ServiceRequests.SingleOrDefault(x => x.TenantId == currentTenant && x.Id == id));
 
     public Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken) =>
         Task.FromResult(ServiceRequests.SingleOrDefault(x => x.TenantId == currentTenant && x.Id == id && x.ClientId == clientId));
+
+    public Task<DomainServiceRequest?> FindForTechnicianAsync(Guid id, Guid technicianId, CancellationToken cancellationToken) =>
+        Task.FromResult(ServiceRequests.SingleOrDefault(x => x.TenantId == currentTenant && x.Id == id && x.TechnicianId == technicianId));
 
     public Task<bool> IsActiveAsync(Guid categoryId, CancellationToken cancellationToken) =>
         Task.FromResult(Categories.Any(x => x.TenantId == currentTenant && x.CategoryId == categoryId && x.Active));
@@ -61,6 +64,29 @@ public sealed class InMemoryStore :
         ProcessedEvents.Add((eventId, tenantId, eventType));
 
     public void Enqueue(OutboxMessage message) => Outbox.Add(message);
+}
+
+/// <summary>
+/// Directorio de usuarios en memoria (en lugar de Identity): devuelve los usuarios de <see cref="Users"/> que se
+/// pidan; con <see cref="Fail"/> simula que Identity no responde.
+/// </summary>
+public sealed class FakeUserDirectory : IUserDirectory
+{
+    public Dictionary<Guid, UserContact> Users { get; } = [];
+
+    public bool Fail { get; set; }
+
+    public List<(IReadOnlyCollection<Guid> Ids, string Token, Guid CorrelationId)> Calls { get; } = [];
+
+    public Task<IReadOnlyDictionary<Guid, UserContact>> LookupAsync(
+        IReadOnlyCollection<Guid> userIds, string accessToken, Guid correlationId, CancellationToken cancellationToken)
+    {
+        Calls.Add((userIds, accessToken, correlationId));
+        IReadOnlyDictionary<Guid, UserContact> result = Fail
+            ? new Dictionary<Guid, UserContact>()
+            : userIds.Where(Users.ContainsKey).ToDictionary(id => id, id => Users[id]);
+        return Task.FromResult(result);
+    }
 }
 
 /// <summary>Reloj fijo para pruebas deterministas.</summary>

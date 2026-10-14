@@ -13,7 +13,7 @@ public sealed record CreateServiceRequestRequest(Guid? CategoryId, string? Descr
 
 public sealed record LocationDto(double? Latitude, double? Longitude);
 
-/// <summary>Esquema <c>ServiceRequest</c> del contrato.</summary>
+/// <summary>Esquema <c>ServiceRequest</c> del contrato (1.1.0: <c>assignedAt</c>, <c>technician</c> y <c>client</c>).</summary>
 public sealed record ServiceRequestResponse(
     Guid Id,
     string Status,
@@ -22,9 +22,12 @@ public sealed record ServiceRequestResponse(
     string Description,
     LocationDto Location,
     string AddressText,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? AssignedAt,
+    TechnicianView? Technician,
+    ClientView? Client)
 {
-    public static ServiceRequestResponse From(DomainServiceRequest s) => new(
+    public static ServiceRequestResponse From(DomainServiceRequest s, TechnicianView? technician = null, ClientView? client = null) => new(
         s.Id,
         s.Status,
         s.CategoryId,
@@ -32,7 +35,10 @@ public sealed record ServiceRequestResponse(
         s.Description,
         new LocationDto(s.Location.Latitude, s.Location.Longitude),
         s.AddressText,
-        s.CreatedAt);
+        s.CreatedAt,
+        s.AssignedAt,
+        technician,
+        client);
 }
 
 public static class ServiceRequestEndpoints
@@ -41,9 +47,9 @@ public static class ServiceRequestEndpoints
 
     public static IEndpointRouteBuilder MapServiceRequestEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup(BasePath).RequireAuthorization(AuthenticatedUser.ClientPolicy);
-        group.MapPost("/", CreateAsync).WithName("createServiceRequest");
-        group.MapGet("/{id:guid}", GetAsync).WithName("getServiceRequest");
+        var group = app.MapGroup(BasePath);
+        group.MapPost("/", CreateAsync).WithName("createServiceRequest").RequireAuthorization(AuthenticatedUser.ClientPolicy);
+        group.MapGet("/{id:guid}", GetAsync).WithName("getServiceRequest").RequireAuthorization(AuthenticatedUser.ReadPolicy);
         return app;
     }
 
@@ -121,10 +127,21 @@ public static class ServiceRequestEndpoints
             return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "El token no trae usuario ni tenant válidos.");
         }
 
-        var serviceRequest = await handler.HandleAsync(user.TenantId, user.UserId, id, cancellationToken);
-        return serviceRequest is null
-            ? Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "La solicitud no existe.")
-            : Results.Ok(ServiceRequestResponse.From(serviceRequest));
+        // El token se reenvía a Identity para leer los nombres (identity-internal.v1.yaml); nunca se registra.
+        var token = context.Request.Headers.Authorization.ToString();
+        token = token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? token["Bearer ".Length..].Trim() : string.Empty;
+        var viewer = new ServiceRequestViewer(user.UserId, user.TenantId, user.Role, token, CorrelationId.Get(context));
+
+        var result = await handler.HandleAsync(viewer, id, cancellationToken);
+        return result switch
+        {
+            GetServiceRequestResult.Found found => Results.Ok(ServiceRequestResponse.From(found.ServiceRequest, found.Technician, found.Client)),
+            GetServiceRequestResult.Forbidden => Results.Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "No puedes ver esta solicitud en su estado actual.",
+                detail: "El técnico asignado ve la solicitud solo entre asignado y completado."),
+            _ => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "La solicitud no existe."),
+        };
     }
 
     private static IResult ValidationProblem(IReadOnlyDictionary<string, string[]> errors) =>

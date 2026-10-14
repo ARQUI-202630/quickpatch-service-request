@@ -44,7 +44,7 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property(x => x.Status).HasColumnName("status").HasMaxLength(30);
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.MatchingUpdatedAt).HasColumnName("matching_updated_at");
-            e.Property<DateTimeOffset?>("AssignedAt").HasColumnName("assigned_at");
+            e.Property(x => x.AssignedAt).HasColumnName("assigned_at");
             e.Property<DateTimeOffset?>("StartedAt").HasColumnName("started_at");
             e.Property<DateTimeOffset?>("CompletedAt").HasColumnName("completed_at");
             e.Property<DateTimeOffset?>("CancelledAt").HasColumnName("cancelled_at");
