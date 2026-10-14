@@ -72,6 +72,19 @@ public static class DependencyInjection
             services.AddHostedService(sp => sp.GetRequiredService<OutboxPublisher>());
             services.AddSingleton<CategoryChangedConsumer>();
             services.AddHostedService(sp => sp.GetRequiredService<CategoryChangedConsumer>());
+
+            // Consumidor propio: un IConsumer solo puede tener una suscripción activa.
+            services.AddSingleton(sp => new MatchingEventsConsumer(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                new ConsumerBuilder<string, string>(new ConsumerConfig
+                {
+                    BootstrapServers = kafka.BootstrapServers,
+                    GroupId = kafka.ConsumerGroupId,
+                    EnableAutoCommit = false,
+                    AutoOffsetReset = AutoOffsetReset.Earliest,
+                }).Build(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MatchingEventsConsumer>>()));
+            services.AddHostedService(sp => sp.GetRequiredService<MatchingEventsConsumer>());
         }
 
         return services;

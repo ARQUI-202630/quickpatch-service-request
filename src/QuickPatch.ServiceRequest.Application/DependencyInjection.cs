@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 
 using QuickPatch.ServiceRequest.Application.Categories;
+using QuickPatch.ServiceRequest.Application.Matching;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
 
 namespace QuickPatch.ServiceRequest.Application;
@@ -18,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<CreateServiceRequestHandler>();
         services.AddScoped<GetServiceRequestHandler>();
         services.AddScoped<ApplyCategoryChangedHandler>();
+        services.AddScoped<MatchingStatusHandler>();
         return services;
     }
 }

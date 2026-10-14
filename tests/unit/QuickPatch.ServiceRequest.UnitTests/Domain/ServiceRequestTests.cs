@@ -143,4 +143,37 @@ public class CategoryReplicaTests
         Assert.Equal("Plomería", category.Name);
         Assert.True(category.Active);
     }
+
+    private static readonly DateTimeOffset MatchingNow = new(2026, 10, 13, 10, 0, 0, TimeSpan.Zero);
+    private static readonly GeoPoint MatchingPoint = new(4.6486, -74.063);
+
+    [Fact]
+    public void EventosDeMatching_SiguenLaMaquinaDeEstadosYDescartanLosViejos()
+    {
+        var request = DomainServiceRequest.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Fuga de agua en la cocina", MatchingPoint, "Calle 63 # 9-45", MatchingNow);
+
+        Assert.Equal(MatchingEventOutcome.Ignored, request.ApplySearchResumed(MatchingNow.AddSeconds(1)));
+        Assert.Equal(ServiceRequestStatus.BuscandoTecnico, request.Status);
+
+        Assert.Equal(MatchingEventOutcome.Applied, request.ApplyNoTechnicianAvailable(MatchingNow.AddSeconds(2)));
+        Assert.Equal(ServiceRequestStatus.EnEspera, request.Status);
+
+        Assert.Equal(MatchingEventOutcome.Stale, request.ApplySearchResumed(MatchingNow.AddSeconds(2)));
+        Assert.Equal(ServiceRequestStatus.EnEspera, request.Status);
+
+        Assert.Equal(MatchingEventOutcome.Applied, request.ApplySearchResumed(MatchingNow.AddSeconds(3)));
+        Assert.Equal(ServiceRequestStatus.BuscandoTecnico, request.Status);
+        Assert.Equal(MatchingNow.AddSeconds(3), request.MatchingUpdatedAt);
+    }
+
+    [Fact]
+    public void SolicitudCancelada_NoVuelveAEsperaNiABuscar()
+    {
+        var request = DomainServiceRequest.Restore(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null,
+            "Fuga de agua en la cocina", MatchingPoint, "Calle 63 # 9-45", ServiceRequestStatus.Cancelado, MatchingNow);
+
+        Assert.Equal(MatchingEventOutcome.Ignored, request.ApplyNoTechnicianAvailable(MatchingNow.AddSeconds(1)));
+        Assert.Equal(MatchingEventOutcome.Ignored, request.ApplySearchResumed(MatchingNow.AddSeconds(2)));
+        Assert.Equal(ServiceRequestStatus.Cancelado, request.Status);
+    }
 }

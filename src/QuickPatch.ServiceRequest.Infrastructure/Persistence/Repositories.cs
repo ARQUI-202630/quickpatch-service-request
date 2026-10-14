@@ -37,6 +37,9 @@ public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServ
 {
     public void Add(DomainServiceRequest serviceRequest) => db.ServiceRequests.Add(serviceRequest);
 
+    public Task<DomainServiceRequest?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        db.ServiceRequests.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
     public Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken) =>
         db.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ClientId == clientId, cancellationToken);
 }

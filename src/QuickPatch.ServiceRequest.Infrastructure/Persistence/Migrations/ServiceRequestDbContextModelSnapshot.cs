@@ -103,6 +103,10 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                         .HasColumnType("geometry(Point,4326)")
                         .HasColumnName("location");
 
+                    b.Property<DateTimeOffset?>("MatchingUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("matching_updated_at");
+
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
