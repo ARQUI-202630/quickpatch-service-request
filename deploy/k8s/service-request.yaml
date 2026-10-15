@@ -1,6 +1,7 @@
 # Despliegue de ServiceRequest en k3s (namespace quickpatch), igual en QA y producción.
 # Primer despliegue: crear el Secret service-request-secretos (deploy/k8s/README.md), reemplazar <vm-mensajeria> por la IP de
-# Kafka del ambiente y aplicar este archivo con `kubectl apply -f deploy/k8s/service-request.yaml`.
+# Kafka del ambiente y <vm-datos> por la IP de su VM de datos (Nominatim), y aplicar este archivo con
+# `kubectl apply -f deploy/k8s/service-request.yaml`.
 # Después, el pipeline actualiza la imagen con `kubectl set image deployment/service-request "*=<imagen>"`.
 apiVersion: v1
 kind: ConfigMap
@@ -21,6 +22,9 @@ data:
   # Consulta interna por lote de nombres (identity-internal.v1.yaml); por el Service de k8s, sin pasar por el gateway.
   Identity__BaseUrl: "http://identity.quickpatch.svc.cluster.local:8080"
   Identity__Timeout: "00:00:02"
+  # Nominatim propio de la VM de datos (ADR-024, DD 8.3.3): en QA http://10.43.98.29:8088 (VM5); en producción, VM4.
+  Geocoding__NominatimUrl: "http://<vm-datos>:8088"
+  Geocoding__Timeout: "00:00:03"
 ---
 apiVersion: apps/v1
 kind: Deployment
