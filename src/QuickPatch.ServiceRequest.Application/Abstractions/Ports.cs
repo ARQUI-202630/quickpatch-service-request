@@ -27,6 +27,13 @@ public interface IServiceRequestRepository
 
     /// <summary>Busca la solicitud asignada a ese técnico; devuelve null si no existe o tiene otro técnico.</summary>
     Task<DomainServiceRequest?> FindForTechnicianAsync(Guid id, Guid technicianId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Página de las solicitudes asignadas al técnico en el tenant de la transacción, de la asignación más reciente a la
+    /// más antigua, y el total que cumple el filtro.
+    /// </summary>
+    Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTechnicianAsync(
+        Guid technicianId, string? status, int skip, int take, CancellationToken cancellationToken);
 }
 
 /// <summary>Réplica local de categorías (tabla <c>service_request_categories</c>).</summary>

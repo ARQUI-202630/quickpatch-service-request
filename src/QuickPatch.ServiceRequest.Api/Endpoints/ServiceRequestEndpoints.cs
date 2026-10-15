@@ -41,15 +41,35 @@ public sealed record ServiceRequestResponse(
         client);
 }
 
+/// <summary>Esquema <c>TechnicianServiceRequest</c> (1.2.0): sin dirección, ubicación ni cliente (RN-SR13).</summary>
+public sealed record TechnicianServiceRequestResponse(
+    Guid Id,
+    string Status,
+    Guid CategoryId,
+    string Description,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? AssignedAt)
+{
+    public static TechnicianServiceRequestResponse From(DomainServiceRequest s) =>
+        new(s.Id, s.Status, s.CategoryId, s.Description, s.CreatedAt, s.AssignedAt);
+}
+
+/// <summary>Esquema <c>TechnicianServiceRequestPage</c> (1.2.0).</summary>
+public sealed record TechnicianServiceRequestPageResponse(
+    IReadOnlyList<TechnicianServiceRequestResponse> Items, int Page, int Size, int TotalItems);
+
 public static class ServiceRequestEndpoints
 {
     public const string BasePath = "/v1/service-requests";
+    public const string TechnicianPath = "/v1/technicians/me/service-requests";
 
     public static IEndpointRouteBuilder MapServiceRequestEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup(BasePath);
         group.MapPost("/", CreateAsync).WithName("createServiceRequest").RequireAuthorization(AuthenticatedUser.ClientPolicy);
         group.MapGet("/{id:guid}", GetAsync).WithName("getServiceRequest").RequireAuthorization(AuthenticatedUser.ReadPolicy);
+        app.MapGet(TechnicianPath, ListForTechnicianAsync).WithName("listTechnicianServiceRequests")
+            .RequireAuthorization(AuthenticatedUser.TechnicianPolicy);
         return app;
     }
 
@@ -142,6 +162,57 @@ public static class ServiceRequestEndpoints
                 detail: "El técnico asignado ve la solicitud solo entre asignado y completado."),
             _ => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "La solicitud no existe."),
         };
+    }
+
+    private static async Task<IResult> ListForTechnicianAsync(
+        HttpContext context,
+        ListTechnicianServiceRequestsHandler handler,
+        string? status,
+        string? page,
+        string? size,
+        CancellationToken cancellationToken)
+    {
+        if (!AuthenticatedUser.TryFrom(context.User, out var user))
+        {
+            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "El token no trae usuario ni tenant válidos.");
+        }
+
+        // page y size llegan como texto para responder 400 con el campo, y no el 400 vacío del enlazado de enteros.
+        var errors = new Dictionary<string, string[]>();
+        var pageNumber = ParseOptionalInt(page, "page", errors);
+        var pageSize = ParseOptionalInt(size, "size", errors);
+        if (errors.Count > 0)
+        {
+            return ValidationProblem(errors);
+        }
+
+        try
+        {
+            var result = await handler.HandleAsync(
+                new ListTechnicianServiceRequestsQuery(user.TenantId, user.UserId, status, pageNumber, pageSize), cancellationToken);
+            return Results.Ok(new TechnicianServiceRequestPageResponse(
+                result.Items.Select(TechnicianServiceRequestResponse.From).ToList(), result.Page, result.Size, result.TotalItems));
+        }
+        catch (DomainValidationException ex)
+        {
+            return ValidationProblem(ex.Errors);
+        }
+    }
+
+    private static int? ParseOptionalInt(string? value, string field, Dictionary<string, string[]> errors)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number))
+        {
+            return number;
+        }
+
+        errors[field] = ["Debe ser un número entero."];
+        return null;
     }
 
     private static IResult ValidationProblem(IReadOnlyDictionary<string, string[]> errors) =>

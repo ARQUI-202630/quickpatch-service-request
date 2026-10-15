@@ -50,6 +50,8 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property<DateTimeOffset?>("CancelledAt").HasColumnName("cancelled_at");
             e.Property<string?>("CancellationReason").HasColumnName("cancellation_reason").HasColumnType("text");
             e.HasIndex(x => new { x.TenantId, x.ClientId }).HasDatabaseName("ix_service_requests_tenant_client");
+            // Historial del técnico (RF-17, DD 5: índice sobre technician_id y status).
+            e.HasIndex(x => new { x.TenantId, x.TechnicianId, x.Status }).HasDatabaseName("ix_service_requests_tenant_technician_status");
             e.HasIndex(x => x.Location).HasDatabaseName("ix_service_requests_location").HasMethod("gist");
         });
 

@@ -12,4 +12,10 @@ public static class ServiceRequestStatus
     public const string Completado = "completado";
     public const string Pagado = "pagado";
     public const string Cancelado = "cancelado";
+
+    /// <summary>Todos los estados del contrato (<c>ServiceRequestStatus</c>).</summary>
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
+    {
+        BuscandoTecnico, EnEspera, Asignado, Cotizado, CotizacionAceptada, EnProgreso, Completado, Pagado, Cancelado,
+    };
 }

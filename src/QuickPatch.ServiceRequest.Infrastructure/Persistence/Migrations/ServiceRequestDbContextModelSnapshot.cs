@@ -18,7 +18,7 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
@@ -134,6 +134,9 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "ClientId")
                         .HasDatabaseName("ix_service_requests_tenant_client");
+
+                    b.HasIndex("TenantId", "TechnicianId", "Status")
+                        .HasDatabaseName("ix_service_requests_tenant_technician_status");
 
                     b.ToTable("service_requests", (string)null);
                 });

@@ -51,6 +51,7 @@ dotnet run --project src/QuickPatch.ServiceRequest.Api
 |`POST /v1/service-requests`: crea la solicitud en `buscando_tecnico` y publica `service-request.created`|`openapi/service-request.v1.yaml`, `events/service-request.created.v1.json`|SCRUM-27 / SCRUM-69|
 |`GET /v1/service-requests/{id}`: consulta del cliente dueño (otro tenant o cliente → 404)|`openapi/service-request.v1.yaml`|SCRUM-27 / SCRUM-69|
 |`GET /v1/service-requests/{id}` para el técnico asignado, solo entre `asignado` y `completado` (fuera de ese rango → 403, otro técnico → 404), con `assignedAt`, `technician` y `client` (nombre y teléfono, RN-SR13). El cliente recibe `technician` y `client` en null|`openapi/service-request.v1.yaml` 1.1.0|SCRUM-34 / SCRUM-91|
+|`GET /v1/technicians/me/service-requests`: solicitudes asignadas al técnico del token, filtro por `status` y paginación, de la asignación más reciente a la más antigua; sin dirección, ubicación ni cliente (RN-SR13)|`openapi/service-request.v1.yaml` 1.2.0|SCRUM-34 / SCRUM-464|
 |Nombre y teléfono desde Identity con la consulta interna por lote, reenviando el JWT del usuario; si Identity no responde en `Identity:Timeout`, el detalle sale con los nombres en null|`openapi/identity-internal.v1.yaml` 1.0.0|SCRUM-91|
 |Réplica local de categorías desde `catalog.category-changed` (sin llamadas a Catalog, SAD 4.3)|`events/catalog.category-changed.v1.json`|SCRUM-27|
 |Estado por los eventos de Matching: `matching.technician-assigned` (`buscando_tecnico` → `asignado`, guarda `technician_id` y `assigned_at`), `matching.no-technician-available` (`buscando_tecnico` → `en_espera`) y `matching.search-resumed` (`en_espera` → `buscando_tecnico`). Un evento más viejo que el último aplicado (`matching_updated_at`) se descarta, porque llegan por topics distintos (ADR-017)|`events/matching.*.v1.json` (`quickpatch-kafka` v0.3.0)|SCRUM-29 / SCRUM-460, SCRUM-91|
@@ -94,5 +95,5 @@ Reglas aplicadas (DD, sección 7.4): RN-SR1, RN-SR9 (cobertura de Bogotá, confi
 
 ## Despliegue
 
-- `deploy/k8s/service-request.yaml`: ConfigMap, Deployment, Service e Ingress (`/v1/service-requests`) para k3s. Las migraciones se aplican con un *migration bundle* de EF Core (`/app/efbundle`, incluido en la imagen) como init container, con el rol `service_request_migrator`.
+- `deploy/k8s/service-request.yaml`: ConfigMap, Deployment, Service e Ingress (`/v1/service-requests` y `/v1/technicians/me/service-requests`) para k3s. Las migraciones se aplican con un *migration bundle* de EF Core (`/app/efbundle`, incluido en la imagen) como init container, con el rol `service_request_migrator`.
 - Secretos y primer despliegue: `deploy/k8s/README.md`.
