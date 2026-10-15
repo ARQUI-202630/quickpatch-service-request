@@ -19,6 +19,9 @@ public sealed record AuthenticatedUser(Guid UserId, Guid TenantId, string Role)
     public const string ClientPolicy = "SoloCliente";
     public const string TechnicianRole = "tecnico";
 
+    /// <summary>Lista de solicitudes del técnico (contrato 1.2.0).</summary>
+    public const string TechnicianPolicy = "SoloTecnico";
+
     /// <summary>Consulta del detalle (contrato 1.1.0): el cliente dueño y el técnico asignado.</summary>
     public const string ReadPolicy = "ClienteOTecnico";
 
@@ -75,7 +78,8 @@ public static class AuthenticationSetup
 
         services.AddAuthorizationBuilder()
             .AddPolicy(AuthenticatedUser.ClientPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole))
-            .AddPolicy(AuthenticatedUser.ReadPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.TechnicianRole));
+            .AddPolicy(AuthenticatedUser.ReadPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.TechnicianRole))
+            .AddPolicy(AuthenticatedUser.TechnicianPolicy, policy => policy.RequireRole(AuthenticatedUser.TechnicianRole));
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, ForbiddenAuditHandler>();
 
         return services;

@@ -104,3 +104,5 @@ spec:
     - http:
         paths:
           - { path: /v1/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
+          # Lista del técnico (contrato 1.2.0). Matching publica /v1/technicians/me; Traefik prioriza la regla más larga.
+          - { path: /v1/technicians/me/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }

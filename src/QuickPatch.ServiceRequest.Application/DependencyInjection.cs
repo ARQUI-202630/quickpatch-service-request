@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<CreateServiceRequestHandler>();
         services.AddScoped<GetServiceRequestHandler>();
+        services.AddScoped<ListTechnicianServiceRequestsHandler>();
         services.AddScoped<ApplyCategoryChangedHandler>();
         services.AddScoped<MatchingStatusHandler>();
         return services;

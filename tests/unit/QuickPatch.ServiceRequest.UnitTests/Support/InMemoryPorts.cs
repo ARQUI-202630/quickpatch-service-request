@@ -49,6 +49,23 @@ public sealed class InMemoryStore :
     public Task<DomainServiceRequest?> FindForTechnicianAsync(Guid id, Guid technicianId, CancellationToken cancellationToken) =>
         Task.FromResult(ServiceRequests.SingleOrDefault(x => x.TenantId == currentTenant && x.Id == id && x.TechnicianId == technicianId));
 
+    public Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTechnicianAsync(
+        Guid technicianId, string? status, int skip, int take, CancellationToken cancellationToken)
+    {
+        List<DomainServiceRequest> matches;
+        lock (this)
+        {
+            matches = ServiceRequests
+                .Where(x => x.TenantId == currentTenant && x.TechnicianId == technicianId && (status is null || x.Status == status))
+                .OrderByDescending(x => x.AssignedAt)
+                .ThenByDescending(x => x.CreatedAt)
+                .ThenBy(x => x.Id)
+                .ToList();
+        }
+
+        return Task.FromResult<(IReadOnlyList<DomainServiceRequest>, int)>((matches.Skip(skip).Take(take).ToList(), matches.Count));
+    }
+
     public Task<bool> IsActiveAsync(Guid categoryId, CancellationToken cancellationToken) =>
         Task.FromResult(Categories.Any(x => x.TenantId == currentTenant && x.CategoryId == categoryId && x.Active));
 
