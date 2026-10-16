@@ -21,6 +21,9 @@ data:
   # Consulta interna por lote de nombres (identity-internal.v1.yaml); por el Service de k8s, sin pasar por el gateway.
   Identity__BaseUrl: "http://identity.quickpatch.svc.cluster.local:8080"
   Identity__Timeout: "00:00:02"
+  # Geocodificación propia (ADR-024, RIE-02): Nominatim corre en la VM de datos de cada ambiente (playbook deploy-nominatim.yml
+  # de quickpatch). El playbook reemplaza <vm-datos>. Si no responde, la solicitud con addressText da 422 direccion-no-encontrada.
+  Geocoding__NominatimUrl: "http://<vm-datos>:8088"
 ---
 apiVersion: apps/v1
 kind: Deployment
