@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 using QuickPatch.ServiceRequest.Application.Events;
@@ -24,7 +26,7 @@ public class MatchingStatusHandlerTests
     }
 
     private MatchingStatusHandler Handler() =>
-        new(store, store, store, new FixedClock(Now), NullLogger<MatchingStatusHandler>.Instance);
+        new(store, store, store, store, new FixedClock(Now), NullLogger<MatchingStatusHandler>.Instance);
 
     private EventEnvelope<NoTechnicianAvailableData> SinTecnicos(DateTimeOffset occurredAt, Guid? eventId = null, Guid? requestId = null) =>
         new(eventId ?? Guid.NewGuid(), EventTypes.NoTechnicianAvailable, 1, occurredAt, Guid.NewGuid(), tenant,
@@ -50,6 +52,37 @@ public class MatchingStatusHandlerTests
     }
 
     [Fact]
+    public async Task SinTecnicos_RegistraElCambioDeEstadoEnElOutbox()
+    {
+        var evento = SinTecnicos(Now.AddSeconds(1));
+
+        await Handler().HandleNoTechnicianAvailableAsync(evento, CancellationToken.None);
+
+        var mensaje = Assert.Single(store.Outbox);
+        Assert.Equal(EventTypes.ServiceRequestStatusChanged, mensaje.EventType);
+        Assert.Equal(tenant, mensaje.TenantId);
+        Assert.Equal(request.Id, mensaje.AggregateId);
+        using var json = JsonDocument.Parse(mensaje.Payload);
+        var raiz = json.RootElement;
+        Assert.Equal(mensaje.Id, raiz.GetProperty("eventId").GetGuid());
+        Assert.Equal("service-request.status-changed", raiz.GetProperty("eventType").GetString());
+        Assert.Equal(1, raiz.GetProperty("eventVersion").GetInt32());
+        Assert.Equal(evento.CorrelationId, raiz.GetProperty("correlationId").GetGuid());
+        Assert.Equal(tenant, raiz.GetProperty("tenantId").GetGuid());
+        Assert.Equal("service-request-service", raiz.GetProperty("producer").GetString());
+        var data = raiz.GetProperty("data");
+        Assert.Equal(request.Id, data.GetProperty("serviceRequestId").GetGuid());
+        Assert.Equal(request.ClientId, data.GetProperty("clientId").GetGuid());
+        Assert.Equal(JsonValueKind.Null, data.GetProperty("technicianId").ValueKind);
+        Assert.Equal(ServiceRequestStatus.BuscandoTecnico, data.GetProperty("previousStatus").GetString());
+        Assert.Equal(ServiceRequestStatus.EnEspera, data.GetProperty("status").GetString());
+        Assert.Equal(Now, data.GetProperty("changedAt").GetDateTimeOffset());
+        Assert.Equal(
+            ["changedAt", "clientId", "previousStatus", "serviceRequestId", "status", "technicianId"],
+            data.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task Reanudada_VuelveABuscandoTecnico()
     {
         await Handler().HandleNoTechnicianAvailableAsync(SinTecnicos(Now.AddSeconds(1)), CancellationToken.None);
@@ -58,6 +91,9 @@ public class MatchingStatusHandlerTests
 
         Assert.Equal(MatchingEventHandlingOutcome.Applied, outcome);
         Assert.Equal(ServiceRequestStatus.BuscandoTecnico, request.Status);
+        Assert.Equal(
+            [ServiceRequestStatus.EnEspera, ServiceRequestStatus.BuscandoTecnico],
+            store.Outbox.Select(m => JsonDocument.Parse(m.Payload).RootElement.GetProperty("data").GetProperty("status").GetString()));
     }
 
     [Fact]
@@ -70,6 +106,7 @@ public class MatchingStatusHandlerTests
 
         Assert.Equal(MatchingEventHandlingOutcome.Duplicate, outcome);
         Assert.Single(store.ProcessedEvents);
+        Assert.Single(store.Outbox);
     }
 
     [Fact]
@@ -83,6 +120,9 @@ public class MatchingStatusHandlerTests
         Assert.Equal(MatchingEventHandlingOutcome.Stale, sinTecnicos);
         Assert.Equal(ServiceRequestStatus.BuscandoTecnico, request.Status);
         Assert.Equal(2, store.ProcessedEvents.Count);
+
+        // Ninguno de los dos cambió el estado: Communication no recibe nada que avisar (SCRUM-466).
+        Assert.Empty(store.Outbox);
     }
 
     [Fact]
@@ -94,6 +134,7 @@ public class MatchingStatusHandlerTests
         Assert.Equal(MatchingEventHandlingOutcome.NotFound, outcome);
         Assert.Single(store.ProcessedEvents);
         Assert.Equal(ServiceRequestStatus.BuscandoTecnico, request.Status);
+        Assert.Empty(store.Outbox);
     }
 
     [Fact]

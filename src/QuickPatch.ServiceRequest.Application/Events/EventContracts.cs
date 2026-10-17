@@ -27,6 +27,18 @@ public sealed record ServiceRequestCreatedData(
 
 public sealed record EventLocation(double Latitude, double Longitude);
 
+/// <summary>
+/// <c>data</c> de <c>service-request.status-changed</c> v1 (SCRUM-466): el cambio de estado que ServiceRequest aplicó.
+/// <see cref="TechnicianId"/> es nulo si la solicitud no tiene técnico.
+/// </summary>
+public sealed record ServiceRequestStatusChangedData(
+    Guid ServiceRequestId,
+    Guid ClientId,
+    Guid? TechnicianId,
+    string PreviousStatus,
+    string Status,
+    DateTimeOffset ChangedAt);
+
 /// <summary><c>data</c> de <c>catalog.category-changed</c> v1.</summary>
 public sealed record CategoryChangedData(Guid CategoryId, string Name, bool Active, DateTimeOffset UpdatedAt);
 
@@ -42,6 +54,7 @@ public sealed record SearchResumedData(Guid ServiceRequestId, Guid ClientId, str
 public static class EventTypes
 {
     public const string ServiceRequestCreated = "service-request.created";
+    public const string ServiceRequestStatusChanged = "service-request.status-changed";
     public const string CategoryChanged = "catalog.category-changed";
     public const string TechnicianAssigned = "matching.technician-assigned";
     public const string NoTechnicianAvailable = "matching.no-technician-available";

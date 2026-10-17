@@ -32,7 +32,7 @@ public class TechnicianAssignedTests
     }
 
     private MatchingStatusHandler Handler() =>
-        new(store, store, store, new FixedClock(Now), NullLogger<MatchingStatusHandler>.Instance);
+        new(store, store, store, store, new FixedClock(Now), NullLogger<MatchingStatusHandler>.Instance);
 
     private EventEnvelope<TechnicianAssignedData> Asignada(Guid technician, Guid? tenantId = null, Guid? eventId = null) =>
         new(eventId ?? Guid.NewGuid(), EventTypes.TechnicianAssigned, 1, Now.AddMinutes(1), Guid.NewGuid(), tenantId ?? tenant,
@@ -51,6 +51,31 @@ public class TechnicianAssignedTests
         Assert.Equal(technician, request.TechnicianId);
         Assert.Equal(Now.AddMinutes(1), request.AssignedAt);
         Assert.Equal((evento.EventId, tenant, EventTypes.TechnicianAssigned), Assert.Single(store.ProcessedEvents));
+
+        var data = JsonDocument.Parse(Assert.Single(store.Outbox).Payload).RootElement.GetProperty("data");
+        Assert.Equal(technician, data.GetProperty("technicianId").GetGuid());
+        Assert.Equal(ServiceRequestStatus.BuscandoTecnico, data.GetProperty("previousStatus").GetString());
+        Assert.Equal(ServiceRequestStatus.Asignado, data.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task AsignadaDespuesDeEnEspera_NoCambiaElEstadoNiRegistraElAviso()
+    {
+        // Caso de SCRUM-466: Matching asigna, pero a ServiceRequest ya le llegó no-technician-available más reciente.
+        await Handler().HandleNoTechnicianAvailableAsync(
+            new EventEnvelope<NoTechnicianAvailableData>(Guid.NewGuid(), EventTypes.NoTechnicianAvailable, 1, Now.AddMinutes(2), Guid.NewGuid(),
+                tenant, "matching-service", new NoTechnicianAvailableData(request.Id, request.ClientId, 3)),
+            CancellationToken.None);
+
+        var outcome = await Handler().HandleTechnicianAssignedAsync(Asignada(Guid.NewGuid()), CancellationToken.None);
+
+        Assert.Equal(MatchingEventHandlingOutcome.Stale, outcome);
+        Assert.Equal(ServiceRequestStatus.EnEspera, request.Status);
+        Assert.Null(request.TechnicianId);
+        var estado = Assert.Single(store.Outbox);
+        Assert.Equal(
+            ServiceRequestStatus.EnEspera,
+            JsonDocument.Parse(estado.Payload).RootElement.GetProperty("data").GetProperty("status").GetString());
     }
 
     [Fact]
@@ -88,6 +113,7 @@ public class TechnicianAssignedTests
         services.AddSingleton<ITenantUnitOfWork>(store);
         services.AddSingleton<IServiceRequestRepository>(store);
         services.AddSingleton<IProcessedEventRepository>(store);
+        services.AddSingleton<IOutbox>(store);
         services.AddScoped<MatchingStatusHandler>();
         var kafka = new ConsumerBuilder<string, string>(new ConsumerConfig { BootstrapServers = "localhost:1", GroupId = "pruebas" }).Build();
         return new MatchingEventsConsumer(
@@ -120,6 +146,7 @@ public class TechnicianAssignedTests
         Assert.Contains(EventTypes.TechnicianAssigned, MatchingEventsConsumer.Topics);
         Assert.Equal(ServiceRequestStatus.Asignado, request.Status);
         Assert.Equal(technician, request.TechnicianId);
+        Assert.Equal(EventTypes.ServiceRequestStatusChanged, Assert.Single(store.Outbox).EventType);
     }
 
     [Fact]
@@ -133,5 +160,6 @@ public class TechnicianAssignedTests
         Assert.True(ok);
         Assert.Equal(ServiceRequestStatus.BuscandoTecnico, request.Status);
         Assert.Empty(store.ProcessedEvents);
+        Assert.Empty(store.Outbox);
     }
 }
