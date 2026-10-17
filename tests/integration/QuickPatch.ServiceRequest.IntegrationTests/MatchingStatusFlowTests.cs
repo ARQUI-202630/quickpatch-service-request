@@ -93,6 +93,19 @@ public class MatchingStatusFlowTests(ServiceRequestEnvironment env)
         await env.PublishAsync(NoTechnician, request.ToString(), MatchingEvent(NoTechnician, tenant, request, t0.AddMinutes(1), tardio));
         await WaitProcessedAsync(tardio);
         Assert.Equal("buscando_tecnico", await StatusAsync(request));
+
+        // SCRUM-466: cada cambio aplicado deja su service-request.status-changed en el Outbox, en la misma transacción;
+        // el evento tardío, que se descartó, no deja ninguno, así que Communication no avisa un estado que no ocurrió.
+        Assert.Equal(["en_espera", "buscando_tecnico"], await StatusChangesAsync(request));
+    }
+
+    private async Task<List<string>> StatusChangesAsync(Guid request)
+    {
+        var json = await env.ScalarAdminAsync<string>(
+            "SELECT coalesce(json_agg(payload -> 'data' ->> 'status' ORDER BY created_at, id), '[]')::text FROM outbox_events " +
+            "WHERE aggregate_id = @id AND event_type = 'service-request.status-changed'",
+            ("id", request));
+        return JsonSerializer.Deserialize<List<string>>(json!)!;
     }
 
     [Fact]
@@ -126,5 +139,6 @@ public class MatchingStatusFlowTests(ServiceRequestEnvironment env)
 
         Assert.Equal("buscando_tecnico", await StatusAsync(request));
         Assert.Equal(0L, await env.ScalarAdminAsync<long>("SELECT count(*) FROM service_requests WHERE id = @id AND matching_updated_at IS NOT NULL", ("id", request)));
+        Assert.Empty(await StatusChangesAsync(request));
     }
 }

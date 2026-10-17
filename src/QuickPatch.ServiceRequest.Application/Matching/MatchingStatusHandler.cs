@@ -10,7 +10,7 @@ namespace QuickPatch.ServiceRequest.Application.Matching;
 
 public enum MatchingEventHandlingOutcome
 {
-    /// <summary>La solicitud cambió de estado.</summary>
+    /// <summary>La solicitud cambió de estado y se registró <c>service-request.status-changed</c> en el Outbox.</summary>
     Applied,
 
     /// <summary>La solicitud no estaba en el estado de origen (por ejemplo, ya se canceló); no cambia.</summary>
@@ -30,11 +30,14 @@ public enum MatchingEventHandlingOutcome
 /// Consumidor de los eventos de Matching que cambian el estado de la solicitud (DD 7.4): con técnico pasa a
 /// <c>asignado</c>, sin técnicos pasa a <c>en_espera</c> y al reanudarse vuelve a <c>buscando_tecnico</c>. Es idempotente por <c>eventId</c> y aplica
 /// el cambio bajo el tenant del evento (DD 10.3), así que una solicitud de otro tenant no se encuentra.
+/// Cuando el cambio se aplica, registra <c>service-request.status-changed</c> en el Outbox en la misma transacción; si el
+/// evento es viejo, repetido o no corresponde al estado, no lo registra, y Communication no avisa (SCRUM-466).
 /// </summary>
 public sealed partial class MatchingStatusHandler(
     ITenantUnitOfWork unitOfWork,
     IServiceRequestRepository serviceRequests,
     IProcessedEventRepository processedEvents,
+    IOutbox outbox,
     TimeProvider clock,
     ILogger<MatchingStatusHandler> logger)
 {
@@ -42,7 +45,7 @@ public sealed partial class MatchingStatusHandler(
         EventEnvelope<TechnicianAssignedData> envelope, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(envelope);
-        return ApplyAsync(envelope.EventId, envelope.TenantId, envelope.EventType, envelope.Data.ServiceRequestId,
+        return ApplyAsync(envelope.EventId, envelope.TenantId, envelope.EventType, envelope.CorrelationId, envelope.Data.ServiceRequestId,
             request => request.ApplyTechnicianAssigned(envelope.Data.TechnicianId, envelope.Data.AssignedAt, envelope.OccurredAt),
             cancellationToken);
     }
@@ -51,7 +54,7 @@ public sealed partial class MatchingStatusHandler(
         EventEnvelope<NoTechnicianAvailableData> envelope, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(envelope);
-        return ApplyAsync(envelope.EventId, envelope.TenantId, envelope.EventType, envelope.Data.ServiceRequestId,
+        return ApplyAsync(envelope.EventId, envelope.TenantId, envelope.EventType, envelope.CorrelationId, envelope.Data.ServiceRequestId,
             request => request.ApplyNoTechnicianAvailable(envelope.OccurredAt), cancellationToken);
     }
 
@@ -59,7 +62,7 @@ public sealed partial class MatchingStatusHandler(
         EventEnvelope<SearchResumedData> envelope, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(envelope);
-        return ApplyAsync(envelope.EventId, envelope.TenantId, envelope.EventType, envelope.Data.ServiceRequestId,
+        return ApplyAsync(envelope.EventId, envelope.TenantId, envelope.EventType, envelope.CorrelationId, envelope.Data.ServiceRequestId,
             request => request.ApplySearchResumed(envelope.OccurredAt), cancellationToken);
     }
 
@@ -67,6 +70,7 @@ public sealed partial class MatchingStatusHandler(
         Guid eventId,
         Guid tenantId,
         string eventType,
+        Guid correlationId,
         Guid serviceRequestId,
         Func<DomainServiceRequest, MatchingEventOutcome> apply,
         CancellationToken cancellationToken) =>
@@ -80,7 +84,8 @@ public sealed partial class MatchingStatusHandler(
                     return MatchingEventHandlingOutcome.Duplicate;
                 }
 
-                processedEvents.Add(eventId, tenantId, eventType, clock.GetUtcNow());
+                var now = clock.GetUtcNow();
+                processedEvents.Add(eventId, tenantId, eventType, now);
 
                 var request = await serviceRequests.FindByIdAsync(serviceRequestId, ct);
                 if (request is null)
@@ -89,16 +94,41 @@ public sealed partial class MatchingStatusHandler(
                     return MatchingEventHandlingOutcome.NotFound;
                 }
 
+                var previousStatus = request.Status;
                 var outcome = apply(request) switch
                 {
                     MatchingEventOutcome.Applied => MatchingEventHandlingOutcome.Applied,
                     MatchingEventOutcome.Ignored => MatchingEventHandlingOutcome.Ignored,
                     _ => MatchingEventHandlingOutcome.Stale,
                 };
+                if (outcome == MatchingEventHandlingOutcome.Applied)
+                {
+                    outbox.Enqueue(BuildStatusChangedEvent(request, previousStatus, correlationId, now));
+                }
+
                 LogApplied(logger, eventType, serviceRequestId, outcome, request.Status);
                 return outcome;
             },
             cancellationToken);
+
+    private static OutboxMessage BuildStatusChangedEvent(
+        DomainServiceRequest request, string previousStatus, Guid correlationId, DateTimeOffset now)
+    {
+        var eventId = Guid.CreateVersion7(now);
+        var envelope = new EventEnvelope<ServiceRequestStatusChangedData>(
+            eventId,
+            EventTypes.ServiceRequestStatusChanged,
+            1,
+            now,
+            correlationId,
+            request.TenantId,
+            EventTypes.Producer,
+            new ServiceRequestStatusChangedData(
+                request.Id, request.ClientId, request.TechnicianId, previousStatus, request.Status, now));
+
+        return new OutboxMessage(
+            eventId, request.TenantId, request.Id, EventTypes.ServiceRequestStatusChanged, EventSerializer.Serialize(envelope));
+    }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Evento {EventId} ya aplicado; se descarta.")]
     private static partial void LogDuplicate(ILogger logger, Guid eventId);
