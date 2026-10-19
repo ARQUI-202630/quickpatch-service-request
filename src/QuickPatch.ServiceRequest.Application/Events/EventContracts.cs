@@ -39,6 +39,18 @@ public sealed record ServiceRequestStatusChangedData(
     string Status,
     DateTimeOffset ChangedAt);
 
+/// <summary>
+/// <c>data</c> de <c>service-request.cancelled</c> v1 (RF-36, SCRUM-474). <see cref="TechnicianId"/> es nulo si la solicitud
+/// no tenía técnico. <see cref="Reason"/> es un dato del usuario: no se escribe en los logs.
+/// </summary>
+public sealed record ServiceRequestCancelledData(
+    Guid ServiceRequestId,
+    Guid ClientId,
+    Guid? TechnicianId,
+    string CancelledByType,
+    string Reason,
+    DateTimeOffset CancelledAt);
+
 /// <summary><c>data</c> de <c>catalog.category-changed</c> v1.</summary>
 public sealed record CategoryChangedData(Guid CategoryId, string Name, bool Active, DateTimeOffset UpdatedAt);
 
@@ -55,6 +67,7 @@ public static class EventTypes
 {
     public const string ServiceRequestCreated = "service-request.created";
     public const string ServiceRequestStatusChanged = "service-request.status-changed";
+    public const string ServiceRequestCancelled = "service-request.cancelled";
     public const string CategoryChanged = "catalog.category-changed";
     public const string TechnicianAssigned = "matching.technician-assigned";
     public const string NoTechnicianAvailable = "matching.no-technician-available";

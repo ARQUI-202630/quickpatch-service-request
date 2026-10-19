@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<GetServiceRequestHandler>();
         services.AddScoped<ListTechnicianServiceRequestsHandler>();
         services.AddScoped<ListTenantServiceRequestsHandler>();
+        services.AddScoped<CancelServiceRequestHandler>();
         services.AddScoped<GetTenantSummaryHandler>();
         services.AddScoped<GetPlatformSummaryHandler>();
         services.AddScoped<ApplyCategoryChangedHandler>();

@@ -13,8 +13,12 @@ namespace QuickPatch.ServiceRequest.UnitTests.Support;
 /// </summary>
 public sealed class InMemoryStore :
     ITenantUnitOfWork, IServiceRequestRepository, ICategoryReplicaRepository, IProcessedEventRepository, IOutbox,
-    IPlatformServiceRequestCounter
+    IPlatformServiceRequestCounter, IAuditLog
 {
+    public List<AuditEntry> Audit { get; } = [];
+
+    public void Add(AuditEntry entry) => Audit.Add(entry);
+
     private Guid? currentTenant;
 
     public List<DomainServiceRequest> ServiceRequests { get; } = [];

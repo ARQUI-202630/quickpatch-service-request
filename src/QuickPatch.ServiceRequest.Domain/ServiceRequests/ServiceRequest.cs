@@ -9,6 +9,18 @@ public sealed class ServiceRequest
     public const int DescriptionMaxLength = 1000;
     public const int AddressMinLength = 5;
     public const int AddressMaxLength = 255;
+    public const int CancellationReasonMinLength = 5;
+    public const int CancellationReasonMaxLength = 500;
+
+    /// <summary>Estados anteriores a <c>en_progreso</c>, desde los que se puede cancelar (RN-SR7).</summary>
+    public static readonly IReadOnlySet<string> CancellableStatuses = new HashSet<string>(StringComparer.Ordinal)
+    {
+        ServiceRequestStatus.BuscandoTecnico,
+        ServiceRequestStatus.EnEspera,
+        ServiceRequestStatus.Asignado,
+        ServiceRequestStatus.Cotizado,
+        ServiceRequestStatus.CotizacionAceptada,
+    };
 
     private ServiceRequest(
         Guid id,
@@ -212,6 +224,58 @@ public sealed class ServiceRequest
         return MatchingEventOutcome.Applied;
     }
 
+    /// <summary>Momento de la cancelación (RF-36); null si no se canceló.</summary>
+    public DateTimeOffset? CancelledAt { get; private set; }
+
+    /// <summary>Motivo de la cancelación (RF-36). Dato del usuario: no se escribe en los logs.</summary>
+    public string? CancellationReason { get; private set; }
+
+    /// <summary>Usuario que canceló; null si canceló el propio servicio (RN-Q6, RN-Q7).</summary>
+    public Guid? CancelledBy { get; private set; }
+
+    /// <summary><c>cliente</c>, <c>admin_tenant</c> o <c>sistema</c> (RN-SR8, <see cref="CancellationActor"/>).</summary>
+    public string? CancelledByType { get; private set; }
+
+    /// <summary>Valida el motivo de la cancelación (RF-36) y lo devuelve sin espacios al inicio ni al final.</summary>
+    public static string ValidateCancellationReason(string? reason)
+    {
+        var motivo = reason?.Trim() ?? string.Empty;
+        if (motivo.Length is < CancellationReasonMinLength or > CancellationReasonMaxLength)
+        {
+            throw new DomainValidationException(new Dictionary<string, string[]>
+            {
+                ["reason"] = [$"El motivo debe tener entre {CancellationReasonMinLength} y {CancellationReasonMaxLength} caracteres."],
+            });
+        }
+
+        return motivo;
+    }
+
+    /// <summary>
+    /// Cancela la solicitud si el servicio no ha iniciado (RN-SR7) y registra quién y por qué (RN-SR8). Devuelve false,
+    /// sin cambiar nada, desde <c>en_progreso</c>, <c>completado</c>, <c>pagado</c> o <c>cancelado</c>.
+    /// </summary>
+    public bool TryCancel(Guid? cancelledBy, string cancelledByType, string reason, DateTimeOffset cancelledAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(cancelledByType);
+        if (!CancellationActor.All.Contains(cancelledByType))
+        {
+            throw new ArgumentException("Tipo de cancelación desconocido.", nameof(cancelledByType));
+        }
+
+        if (!CancellableStatuses.Contains(Status))
+        {
+            return false;
+        }
+
+        Status = ServiceRequestStatus.Cancelado;
+        CancelledAt = cancelledAt;
+        CancellationReason = ValidateCancellationReason(reason);
+        CancelledBy = cancelledBy;
+        CancelledByType = cancelledByType;
+        return true;
+    }
+
     /// <summary>Reconstruye una solicitud persistida; lo usa el repositorio.</summary>
     public static ServiceRequest Restore(
         Guid id,
@@ -231,4 +295,14 @@ public sealed class ServiceRequest
             Status = status,
             AssignedAt = assignedAt,
         };
+}
+
+/// <summary>Quién canceló la solicitud (<c>cancelled_by_type</c>, RN-SR8).</summary>
+public static class CancellationActor
+{
+    public const string Cliente = "cliente";
+    public const string AdminTenant = "admin_tenant";
+    public const string Sistema = "sistema";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { Cliente, AdminTenant, Sistema };
 }
