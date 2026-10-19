@@ -10,7 +10,7 @@ using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.Se
 
 namespace QuickPatch.ServiceRequest.Infrastructure.Persistence;
 
-/// <summary>Base de datos de ServiceRequest Service (DD, secciones 5.5, 5.15, 5.16 y 5.17).</summary>
+/// <summary>Base de datos de ServiceRequest Service (DD, secciones 5.5, 5.15, 5.16, 5.17 y la copia de 5.18).</summary>
 public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbContext> options) : DbContext(options)
 {
     public DbSet<DomainServiceRequest> ServiceRequests => Set<DomainServiceRequest>();
@@ -20,6 +20,8 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
     public DbSet<OutboxEventRecord> OutboxEvents => Set<OutboxEventRecord>();
 
     public DbSet<ProcessedEventRecord> ProcessedEvents => Set<ProcessedEventRecord>();
+
+    public DbSet<LocalityRecord> Localities => Set<LocalityRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -90,7 +92,28 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(100);
             e.Property(x => x.ProcessedAt).HasColumnName("processed_at");
         });
+
+        // Copia de solo lectura del catálogo de Matching (P-09): igual para todos los tenants, sin tenant_id ni RLS.
+        modelBuilder.Entity<LocalityRecord>(e =>
+        {
+            e.ToTable("localities");
+            e.HasKey(x => x.Code);
+            e.Property(x => x.Code).HasColumnName("code").HasMaxLength(10).ValueGeneratedNever();
+            e.Property(x => x.Name).HasColumnName("name").HasMaxLength(60);
+            e.Property(x => x.Area).HasColumnName("area").HasColumnType("geometry(MultiPolygon,4326)");
+            e.HasIndex(x => x.Name).IsUnique().HasDatabaseName("ux_localities_name");
+        });
     }
+}
+
+/// <summary>Fila de <c>localities</c> (copia de DD 5.18, P-09); la carga una migración y la aplicación solo la lee.</summary>
+public sealed class LocalityRecord
+{
+    public string Code { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
+
+    public MultiPolygon Area { get; set; } = null!;
 }
 
 /// <summary>Fila de <c>outbox_events</c> (DD 5.15).</summary>

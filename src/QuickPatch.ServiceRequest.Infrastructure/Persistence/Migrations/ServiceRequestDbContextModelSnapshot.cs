@@ -18,7 +18,7 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
@@ -139,6 +139,33 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_service_requests_tenant_technician_status");
 
                     b.ToTable("service_requests", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Infrastructure.Persistence.LocalityRecord", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("code");
+
+                    b.Property<MultiPolygon>("Area")
+                        .IsRequired()
+                        .HasColumnType("geometry(MultiPolygon,4326)")
+                        .HasColumnName("area");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Code");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_localities_name");
+
+                    b.ToTable("localities", (string)null);
                 });
 
             modelBuilder.Entity("QuickPatch.ServiceRequest.Infrastructure.Persistence.OutboxEventRecord", b =>

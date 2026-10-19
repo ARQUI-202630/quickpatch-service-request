@@ -1,4 +1,5 @@
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -79,3 +80,24 @@ public interface IUserDirectory
 }
 
 public sealed record UserContact(Guid Id, string FullName, string? Phone);
+
+/// <summary>
+/// Geocodificador de direcciones dentro de Bogotá: el Nominatim propio de la VM de datos (ADR-024, DD 8.3.3).
+/// </summary>
+public interface IGeocoder
+{
+    /// <summary>
+    /// Devuelve el punto y lo que reconoció el geocodificador, o null si no encontró la dirección, no está configurado
+    /// o no respondió a tiempo. La dirección es un dato personal: nunca se registra en logs (K12).
+    /// </summary>
+    Task<GeocodedAddress?> GeocodeAsync(string addressText, CancellationToken cancellationToken);
+}
+
+public sealed record GeocodedAddress(GeoPoint Location, string MatchedAddress);
+
+/// <summary>Copia de solo lectura de las localidades de Bogotá (tabla <c>localities</c>, P-09).</summary>
+public interface ILocalityCatalog
+{
+    /// <summary>Localidad que contiene el punto; null si el punto no cae en ninguna de las 20.</summary>
+    Task<Locality?> FindContainingAsync(GeoPoint point, CancellationToken cancellationToken);
+}

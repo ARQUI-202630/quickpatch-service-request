@@ -1,5 +1,6 @@
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -104,6 +105,28 @@ public sealed class FakeUserDirectory : IUserDirectory
             : userIds.Where(Users.ContainsKey).ToDictionary(id => id, id => Users[id]);
         return Task.FromResult(result);
     }
+}
+
+/// <summary>Geocodificador falso: devuelve <see cref="Result"/> y guarda las direcciones que recibió.</summary>
+public sealed class FakeGeocoder : IGeocoder
+{
+    public GeocodedAddress? Result { get; set; } = new(new GeoPoint(4.6486, -74.063), "Calle 63, Chapinero, Bogotá");
+
+    public List<string> Calls { get; } = [];
+
+    public Task<GeocodedAddress?> GeocodeAsync(string addressText, CancellationToken cancellationToken)
+    {
+        Calls.Add(addressText);
+        return Task.FromResult(Result);
+    }
+}
+
+/// <summary>Catálogo de localidades falso: Chapinero para cualquier punto, salvo que <see cref="Result"/> sea null.</summary>
+public sealed class FakeLocalityCatalog : ILocalityCatalog
+{
+    public Locality? Result { get; set; } = new("02", "Chapinero");
+
+    public Task<Locality?> FindContainingAsync(GeoPoint point, CancellationToken cancellationToken) => Task.FromResult(Result);
 }
 
 /// <summary>Reloj fijo para pruebas deterministas.</summary>
