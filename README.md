@@ -54,6 +54,9 @@ dotnet run --project src/QuickPatch.ServiceRequest.Api
 |`GET /v1/service-requests/{id}`: consulta del cliente dueño (otro tenant o cliente → 404)|`openapi/service-request.v1.yaml`|SCRUM-27 / SCRUM-69|
 |`GET /v1/service-requests/{id}` para el técnico asignado, solo entre `asignado` y `completado` (fuera de ese rango → 403, otro técnico → 404), con `assignedAt`, `technician` y `client` (nombre y teléfono, RN-SR13). El cliente recibe `technician` y `client` en null|`openapi/service-request.v1.yaml` 1.1.0|SCRUM-34 / SCRUM-91|
 |`GET /v1/technicians/me/service-requests`: solicitudes asignadas al técnico del token, filtro por `status` y paginación, de la asignación más reciente a la más antigua; sin dirección, ubicación ni cliente (RN-SR13)|`openapi/service-request.v1.yaml` 1.2.0|SCRUM-34 / SCRUM-464|
+|`GET /v1/service-requests` (`admin_tenant`): solicitudes del tenant con filtro por `status` y paginación, de la más reciente a la más antigua; solo estado, identificadores y fechas, sin dirección, ubicación ni contacto|`openapi/service-request.v1.yaml` 1.4.0|SCRUM-38 / SCRUM-103|
+|`GET /v1/admin/service-requests/summary` (`admin_tenant`): conteo de los 9 estados del tenant (0 si no hay) y `createdToday` según el día de Bogotá, bajo RLS|`openapi/service-request.v1.yaml` 1.4.0|SCRUM-38 / SCRUM-103|
+|`GET /v1/platform/service-requests/summary?tenantId=` (`admin_plataforma`): los mismos conteos por tenant, solo conteos; usa el rol `Platform:ReadRole` (`service_request_platform`, DD 10.2 y 10.4) y deja cada consulta en el log estructurado|`openapi/service-request.v1.yaml` 1.4.0|SCRUM-38 / SCRUM-103|
 |Nombre y teléfono desde Identity con la consulta interna por lote, reenviando el JWT del usuario; si Identity no responde en `Identity:Timeout`, el detalle sale con los nombres en null|`openapi/identity-internal.v1.yaml` 1.0.0|SCRUM-91|
 |Réplica local de categorías desde `catalog.category-changed` (sin llamadas a Catalog, SAD 4.3)|`events/catalog.category-changed.v1.json`|SCRUM-27|
 |Estado por los eventos de Matching: `matching.technician-assigned` (`buscando_tecnico` → `asignado`, guarda `technician_id` y `assigned_at`), `matching.no-technician-available` (`buscando_tecnico` → `en_espera`) y `matching.search-resumed` (`en_espera` → `buscando_tecnico`). Un evento más viejo que el último aplicado (`matching_updated_at`) se descarta, porque llegan por topics distintos (ADR-017)|`events/matching.*.v1.json` (`quickpatch-kafka` v0.3.0)|SCRUM-29 / SCRUM-460, SCRUM-91|
@@ -84,6 +87,7 @@ Reglas aplicadas (DD, sección 7.4): RN-SR1, RN-SR9 (cobertura de Bogotá, confi
 |`Jwt__PublicKeyPem`, `Jwt__Issuer`, `Jwt__Audience`|Validación del token de Identity|
 |`Kafka__BootstrapServers`|Kafka (VM6); vacío deshabilita el publicador y el consumidor|
 |`Outbox__PublisherRole`|Rol `BYPASSRLS` del publicador|
+|`Platform__ReadRole`|Rol `service_request_platform` de la vista de plataforma (solo `SELECT` sobre `tenant_id`, `status` y `created_at`)|
 |`Coverage__*`|Rectángulo del área de cobertura (RN-SR9)|
 |`Identity__BaseUrl`, `Identity__Timeout`|Identity dentro del clúster (`http://identity.quickpatch.svc.cluster.local:8080`) y espera máxima de la consulta de nombres (2 s); vacío no consulta y los nombres salen en null|
 |`Geocoding__NominatimUrl`, `Geocoding__Timeout`|Nominatim de la VM de datos (QA: `http://10.43.98.29:8088`, VM5) y espera máxima de la geocodificación, reintento incluido (3 s); vacía, toda solicitud sin `location` responde `422 direccion-no-encontrada`|

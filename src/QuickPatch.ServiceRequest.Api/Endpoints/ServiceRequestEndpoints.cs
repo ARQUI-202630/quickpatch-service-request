@@ -253,7 +253,7 @@ public static class ServiceRequestEndpoints
         }
     }
 
-    private static int? ParseOptionalInt(string? value, string field, Dictionary<string, string[]> errors)
+    internal static int? ParseOptionalInt(string? value, string field, Dictionary<string, string[]> errors)
     {
         if (value is null)
         {
@@ -269,7 +269,7 @@ public static class ServiceRequestEndpoints
         return null;
     }
 
-    private static IResult ValidationProblem(IReadOnlyDictionary<string, string[]> errors) =>
+    internal static IResult ValidationProblem(IReadOnlyDictionary<string, string[]> errors) =>
         Results.ValidationProblem(
             errors.ToDictionary(e => e.Key, e => e.Value),
             title: "La solicitud tiene datos inválidos",

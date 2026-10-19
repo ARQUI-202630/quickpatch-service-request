@@ -35,6 +35,34 @@ public interface IServiceRequestRepository
     /// </summary>
     Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTechnicianAsync(
         Guid technicianId, string? status, int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Página de las solicitudes del tenant de la transacción, de la más reciente a la más antigua, y el total que cumple
+    /// el filtro (panel del <c>admin_tenant</c>, contrato 1.4.0).
+    /// </summary>
+    Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTenantAsync(
+        string? status, int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>Cuántas solicitudes del tenant de la transacción hay por estado y cuántas se crearon desde <paramref name="createdSince"/>.</summary>
+    Task<IReadOnlyList<StatusCountRow>> CountByStatusAsync(DateTimeOffset createdSince, CancellationToken cancellationToken);
+}
+
+/// <summary>Conteo de un estado: total y creadas desde el inicio del día.</summary>
+public sealed record StatusCountRow(string Status, int Total, int CreatedSince);
+
+/// <summary>Conteo de un estado en un tenant (vista de plataforma).</summary>
+public sealed record TenantStatusCountRow(Guid TenantId, string Status, int Total, int CreatedSince);
+
+/// <summary>
+/// Conteos de solicitudes de todos los tenants para el <c>admin_plataforma</c> (DD 10.4, DEP-15). Es la única lectura de
+/// ServiceRequest fuera de RLS: usa el rol <c>service_request_platform</c>, que solo ve <c>tenant_id</c>, <c>status</c> y
+/// <c>created_at</c>, en una transacción de solo lectura. Nunca devuelve el contenido de una solicitud.
+/// </summary>
+public interface IPlatformServiceRequestCounter
+{
+    /// <param name="tenantId">Solo ese tenant; null para todos.</param>
+    Task<IReadOnlyList<TenantStatusCountRow>> CountByTenantAsync(
+        Guid? tenantId, DateTimeOffset createdSince, CancellationToken cancellationToken);
 }
 
 /// <summary>Réplica local de categorías (tabla <c>service_request_categories</c>).</summary>

@@ -68,6 +68,34 @@ public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServ
             .ToListAsync(cancellationToken);
         return (items, total);
     }
+
+    public async Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTenantAsync(
+        string? status, int skip, int take, CancellationToken cancellationToken)
+    {
+        var query = db.ServiceRequests.AsNoTracking();
+        if (status is not null)
+        {
+            query = query.Where(x => x.Status == status);
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenBy(x => x.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+        return (items, total);
+    }
+
+    public async Task<IReadOnlyList<StatusCountRow>> CountByStatusAsync(DateTimeOffset createdSince, CancellationToken cancellationToken)
+    {
+        var rows = await db.ServiceRequests.AsNoTracking()
+            .GroupBy(x => x.Status)
+            .Select(g => new { Status = g.Key, Total = g.Count(), CreatedSince = g.Count(x => x.CreatedAt >= createdSince) })
+            .ToListAsync(cancellationToken);
+        return rows.Select(r => new StatusCountRow(r.Status, r.Total, r.CreatedSince)).ToList();
+    }
 }
 
 public sealed class CategoryReplicaRepository(ServiceRequestDbContext db) : ICategoryReplicaRepository

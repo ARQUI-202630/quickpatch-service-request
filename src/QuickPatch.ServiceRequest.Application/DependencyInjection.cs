@@ -20,6 +20,9 @@ public static class DependencyInjection
         services.AddScoped<PreviewLocationHandler>();
         services.AddScoped<GetServiceRequestHandler>();
         services.AddScoped<ListTechnicianServiceRequestsHandler>();
+        services.AddScoped<ListTenantServiceRequestsHandler>();
+        services.AddScoped<GetTenantSummaryHandler>();
+        services.AddScoped<GetPlatformSummaryHandler>();
         services.AddScoped<ApplyCategoryChangedHandler>();
         services.AddScoped<MatchingStatusHandler>();
         return services;
