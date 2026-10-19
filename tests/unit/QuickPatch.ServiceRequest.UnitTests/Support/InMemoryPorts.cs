@@ -1,5 +1,6 @@
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -7,10 +8,12 @@ namespace QuickPatch.ServiceRequest.UnitTests.Support;
 
 /// <summary>
 /// Implementación en memoria de los puertos. Emula RLS: cada lectura solo ve las filas del tenant de la
-/// transacción en curso, y fuera de una transacción no se ve nada (falla cerrado, como en el DD 10.2).
+/// transacción en curso, y fuera de una transacción no se ve nada (falla cerrado, como en el DD 10.2). El conteo de
+/// plataforma es la excepción, como el rol <c>service_request_platform</c>: ve todos los tenants, pero solo cuenta.
 /// </summary>
 public sealed class InMemoryStore :
-    ITenantUnitOfWork, IServiceRequestRepository, ICategoryReplicaRepository, IProcessedEventRepository, IOutbox
+    ITenantUnitOfWork, IServiceRequestRepository, ICategoryReplicaRepository, IProcessedEventRepository, IOutbox,
+    IPlatformServiceRequestCounter
 {
     private Guid? currentTenant;
 
@@ -66,6 +69,49 @@ public sealed class InMemoryStore :
         return Task.FromResult<(IReadOnlyList<DomainServiceRequest>, int)>((matches.Skip(skip).Take(take).ToList(), matches.Count));
     }
 
+    public Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTenantAsync(
+        string? status, int skip, int take, CancellationToken cancellationToken)
+    {
+        List<DomainServiceRequest> matches;
+        lock (this)
+        {
+            matches = ServiceRequests
+                .Where(x => x.TenantId == currentTenant && (status is null || x.Status == status))
+                .OrderByDescending(x => x.CreatedAt)
+                .ThenBy(x => x.Id)
+                .ToList();
+        }
+
+        return Task.FromResult<(IReadOnlyList<DomainServiceRequest>, int)>((matches.Skip(skip).Take(take).ToList(), matches.Count));
+    }
+
+    public Task<IReadOnlyList<StatusCountRow>> CountByStatusAsync(DateTimeOffset createdSince, CancellationToken cancellationToken)
+    {
+        lock (this)
+        {
+            IReadOnlyList<StatusCountRow> rows = ServiceRequests
+                .Where(x => x.TenantId == currentTenant)
+                .GroupBy(x => x.Status)
+                .Select(g => new StatusCountRow(g.Key, g.Count(), g.Count(x => x.CreatedAt >= createdSince)))
+                .ToList();
+            return Task.FromResult(rows);
+        }
+    }
+
+    public Task<IReadOnlyList<TenantStatusCountRow>> CountByTenantAsync(
+        Guid? tenantId, DateTimeOffset createdSince, CancellationToken cancellationToken)
+    {
+        lock (this)
+        {
+            IReadOnlyList<TenantStatusCountRow> rows = ServiceRequests
+                .Where(x => tenantId is null || x.TenantId == tenantId)
+                .GroupBy(x => (x.TenantId, x.Status))
+                .Select(g => new TenantStatusCountRow(g.Key.TenantId, g.Key.Status, g.Count(), g.Count(x => x.CreatedAt >= createdSince)))
+                .ToList();
+            return Task.FromResult(rows);
+        }
+    }
+
     public Task<bool> IsActiveAsync(Guid categoryId, CancellationToken cancellationToken) =>
         Task.FromResult(Categories.Any(x => x.TenantId == currentTenant && x.CategoryId == categoryId && x.Active));
 
@@ -104,6 +150,28 @@ public sealed class FakeUserDirectory : IUserDirectory
             : userIds.Where(Users.ContainsKey).ToDictionary(id => id, id => Users[id]);
         return Task.FromResult(result);
     }
+}
+
+/// <summary>Geocodificador falso: devuelve <see cref="Result"/> y guarda las direcciones que recibió.</summary>
+public sealed class FakeGeocoder : IGeocoder
+{
+    public GeocodedAddress? Result { get; set; } = new(new GeoPoint(4.6486, -74.063), "Calle 63, Chapinero, Bogotá");
+
+    public List<string> Calls { get; } = [];
+
+    public Task<GeocodedAddress?> GeocodeAsync(string addressText, CancellationToken cancellationToken)
+    {
+        Calls.Add(addressText);
+        return Task.FromResult(Result);
+    }
+}
+
+/// <summary>Catálogo de localidades falso: Chapinero para cualquier punto, salvo que <see cref="Result"/> sea null.</summary>
+public sealed class FakeLocalityCatalog : ILocalityCatalog
+{
+    public Locality? Result { get; set; } = new("02", "Chapinero");
+
+    public Task<Locality?> FindContainingAsync(GeoPoint point, CancellationToken cancellationToken) => Task.FromResult(Result);
 }
 
 /// <summary>Reloj fijo para pruebas deterministas.</summary>

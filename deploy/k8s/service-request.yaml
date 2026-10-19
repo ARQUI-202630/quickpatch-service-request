@@ -13,6 +13,8 @@ data:
   Jwt__Audience: "quickpatch"
   Kafka__BootstrapServers: "<vm-mensajeria>:9092"
   Outbox__PublisherRole: "service_request_outbox"
+  # Conteos de todos los tenants para el admin_plataforma (DD 10.4): rol de db/roles.sql, adoptado con SET LOCAL ROLE.
+  Platform__ReadRole: "service_request_platform"
   Kafka__ConsumerGroupId: "service-request-service"
   Coverage__MinLatitude: "4.45"
   Coverage__MaxLatitude: "4.85"
@@ -109,3 +111,6 @@ spec:
           - { path: /v1/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
           # Lista del técnico (contrato 1.2.0). Matching publica /v1/technicians/me; Traefik prioriza la regla más larga.
           - { path: /v1/technicians/me/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
+          # Panel operativo (contrato 1.4.0). Identity publica /v1/platform; Traefik prioriza la regla más larga.
+          - { path: /v1/admin/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
+          - { path: /v1/platform/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }

@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 
+using NetTopologySuite.Geometries;
+
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -65,6 +68,34 @@ public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServ
             .ToListAsync(cancellationToken);
         return (items, total);
     }
+
+    public async Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTenantAsync(
+        string? status, int skip, int take, CancellationToken cancellationToken)
+    {
+        var query = db.ServiceRequests.AsNoTracking();
+        if (status is not null)
+        {
+            query = query.Where(x => x.Status == status);
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenBy(x => x.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+        return (items, total);
+    }
+
+    public async Task<IReadOnlyList<StatusCountRow>> CountByStatusAsync(DateTimeOffset createdSince, CancellationToken cancellationToken)
+    {
+        var rows = await db.ServiceRequests.AsNoTracking()
+            .GroupBy(x => x.Status)
+            .Select(g => new { Status = g.Key, Total = g.Count(), CreatedSince = g.Count(x => x.CreatedAt >= createdSince) })
+            .ToListAsync(cancellationToken);
+        return rows.Select(r => new StatusCountRow(r.Status, r.Total, r.CreatedSince)).ToList();
+    }
 }
 
 public sealed class CategoryReplicaRepository(ServiceRequestDbContext db) : ICategoryReplicaRepository
@@ -108,5 +139,21 @@ public sealed class EfOutbox(ServiceRequestDbContext db, TimeProvider clock) : I
             CreatedAt = clock.GetUtcNow(),
             Attempts = 0,
         });
+    }
+}
+
+/// <summary>Localidad que contiene un punto (<c>ST_Covers</c>, igual que Matching): un punto en el borde cuenta como dentro.</summary>
+public sealed class LocalityCatalog(ServiceRequestDbContext db) : ILocalityCatalog
+{
+    public async Task<Locality?> FindContainingAsync(GeoPoint point, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        var location = new Point(point.Longitude, point.Latitude) { SRID = 4326 };
+        var row = await db.Localities.AsNoTracking()
+            .Where(l => l.Area.Covers(location))
+            .OrderBy(l => l.Code)
+            .Select(l => new { l.Code, l.Name })
+            .FirstOrDefaultAsync(cancellationToken);
+        return row is null ? null : new Locality(row.Code, row.Name);
     }
 }

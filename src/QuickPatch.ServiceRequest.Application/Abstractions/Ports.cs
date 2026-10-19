@@ -1,4 +1,5 @@
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -34,6 +35,34 @@ public interface IServiceRequestRepository
     /// </summary>
     Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTechnicianAsync(
         Guid technicianId, string? status, int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Página de las solicitudes del tenant de la transacción, de la más reciente a la más antigua, y el total que cumple
+    /// el filtro (panel del <c>admin_tenant</c>, contrato 1.4.0).
+    /// </summary>
+    Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTenantAsync(
+        string? status, int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>Cuántas solicitudes del tenant de la transacción hay por estado y cuántas se crearon desde <paramref name="createdSince"/>.</summary>
+    Task<IReadOnlyList<StatusCountRow>> CountByStatusAsync(DateTimeOffset createdSince, CancellationToken cancellationToken);
+}
+
+/// <summary>Conteo de un estado: total y creadas desde el inicio del día.</summary>
+public sealed record StatusCountRow(string Status, int Total, int CreatedSince);
+
+/// <summary>Conteo de un estado en un tenant (vista de plataforma).</summary>
+public sealed record TenantStatusCountRow(Guid TenantId, string Status, int Total, int CreatedSince);
+
+/// <summary>
+/// Conteos de solicitudes de todos los tenants para el <c>admin_plataforma</c> (DD 10.4, DEP-15). Es la única lectura de
+/// ServiceRequest fuera de RLS: usa el rol <c>service_request_platform</c>, que solo ve <c>tenant_id</c>, <c>status</c> y
+/// <c>created_at</c>, en una transacción de solo lectura. Nunca devuelve el contenido de una solicitud.
+/// </summary>
+public interface IPlatformServiceRequestCounter
+{
+    /// <param name="tenantId">Solo ese tenant; null para todos.</param>
+    Task<IReadOnlyList<TenantStatusCountRow>> CountByTenantAsync(
+        Guid? tenantId, DateTimeOffset createdSince, CancellationToken cancellationToken);
 }
 
 /// <summary>Réplica local de categorías (tabla <c>service_request_categories</c>).</summary>
@@ -79,3 +108,24 @@ public interface IUserDirectory
 }
 
 public sealed record UserContact(Guid Id, string FullName, string? Phone);
+
+/// <summary>
+/// Geocodificador de direcciones dentro de Bogotá: el Nominatim propio de la VM de datos (ADR-024, DD 8.3.3).
+/// </summary>
+public interface IGeocoder
+{
+    /// <summary>
+    /// Devuelve el punto y lo que reconoció el geocodificador, o null si no encontró la dirección, no está configurado
+    /// o no respondió a tiempo. La dirección es un dato personal: nunca se registra en logs (K12).
+    /// </summary>
+    Task<GeocodedAddress?> GeocodeAsync(string addressText, CancellationToken cancellationToken);
+}
+
+public sealed record GeocodedAddress(GeoPoint Location, string MatchedAddress);
+
+/// <summary>Copia de solo lectura de las localidades de Bogotá (tabla <c>localities</c>, P-09).</summary>
+public interface ILocalityCatalog
+{
+    /// <summary>Localidad que contiene el punto; null si el punto no cae en ninguna de las 20.</summary>
+    Task<Locality?> FindContainingAsync(GeoPoint point, CancellationToken cancellationToken);
+}

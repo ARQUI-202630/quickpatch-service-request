@@ -73,6 +73,53 @@ public sealed class ServiceRequest
         string? addressText,
         DateTimeOffset createdAt)
     {
+        var errors = CollectFieldErrors(tenantId, clientId, categoryId, description, addressText);
+        if (location is null || !location.IsValid)
+        {
+            errors["location"] = ["La ubicación debe tener una latitud entre -90 y 90 y una longitud entre -180 y 180."];
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new DomainValidationException(errors);
+        }
+
+        return new ServiceRequest(
+            Guid.CreateVersion7(createdAt), tenantId, clientId, categoryId, description!.Trim(), location!, addressText!.Trim(), createdAt);
+    }
+
+    /// <summary>
+    /// Valida todo menos la ubicación. Sirve para no geocodificar una solicitud que de todas formas se rechazaría
+    /// (contrato 1.3.0: sin <c>location</c>, ServiceRequest geocodifica <c>addressText</c>).
+    /// </summary>
+    public static void ValidateFieldsWithoutLocation(
+        Guid tenantId, Guid clientId, Guid categoryId, string? description, string? addressText)
+    {
+        var errors = CollectFieldErrors(tenantId, clientId, categoryId, description, addressText);
+        if (errors.Count > 0)
+        {
+            throw new DomainValidationException(errors);
+        }
+    }
+
+    /// <summary>Valida la dirección escrita sola (vista previa de la ubicación, contrato 1.3.0).</summary>
+    public static string ValidateAddress(string? addressText)
+    {
+        var direccion = addressText?.Trim() ?? string.Empty;
+        if (direccion.Length is < AddressMinLength or > AddressMaxLength)
+        {
+            throw new DomainValidationException(new Dictionary<string, string[]>
+            {
+                ["addressText"] = [$"La dirección debe tener entre {AddressMinLength} y {AddressMaxLength} caracteres."],
+            });
+        }
+
+        return direccion;
+    }
+
+    private static Dictionary<string, string[]> CollectFieldErrors(
+        Guid tenantId, Guid clientId, Guid categoryId, string? description, string? addressText)
+    {
         var errors = new Dictionary<string, string[]>();
         var descripcion = description?.Trim() ?? string.Empty;
         var direccion = addressText?.Trim() ?? string.Empty;
@@ -102,18 +149,7 @@ public sealed class ServiceRequest
             errors["addressText"] = [$"La dirección debe tener entre {AddressMinLength} y {AddressMaxLength} caracteres."];
         }
 
-        if (location is null || !location.IsValid)
-        {
-            errors["location"] = ["La ubicación debe tener una latitud entre -90 y 90 y una longitud entre -180 y 180."];
-        }
-
-        if (errors.Count > 0)
-        {
-            throw new DomainValidationException(errors);
-        }
-
-        return new ServiceRequest(
-            Guid.CreateVersion7(createdAt), tenantId, clientId, categoryId, descripcion, location!, direccion, createdAt);
+        return errors;
     }
 
     /// <summary>

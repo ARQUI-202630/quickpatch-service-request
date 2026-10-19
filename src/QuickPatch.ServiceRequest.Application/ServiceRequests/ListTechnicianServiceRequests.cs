@@ -18,34 +18,13 @@ public sealed record TechnicianServiceRequestPage(IReadOnlyList<DomainServiceReq
 /// </summary>
 public sealed class ListTechnicianServiceRequestsHandler(ITenantUnitOfWork unitOfWork, IServiceRequestRepository serviceRequests)
 {
-    public const int DefaultSize = 20;
-    public const int MaxSize = 100;
+    public const int DefaultSize = ListFilters.DefaultSize;
+    public const int MaxSize = ListFilters.MaxSize;
 
     public async Task<TechnicianServiceRequestPage> HandleAsync(ListTechnicianServiceRequestsQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
-        var page = query.Page ?? 1;
-        var size = query.Size ?? DefaultSize;
-        var errors = new Dictionary<string, string[]>();
-        if (query.Status is not null && !ServiceRequestStatus.All.Contains(query.Status))
-        {
-            errors["status"] = ["El estado no existe."];
-        }
-
-        if (page < 1)
-        {
-            errors["page"] = ["La página empieza en 1."];
-        }
-
-        if (size is < 1 or > MaxSize)
-        {
-            errors["size"] = [$"El tamaño de página va de 1 a {MaxSize}."];
-        }
-
-        if (errors.Count > 0)
-        {
-            throw new DomainValidationException(errors);
-        }
+        var (page, size) = ListFilters.Validate(query.Status, query.Page, query.Size);
 
         var (items, total) = await unitOfWork.ExecuteAsync(
             query.TenantId,

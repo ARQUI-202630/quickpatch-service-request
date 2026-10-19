@@ -23,6 +23,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     public FakeUserDirectory Directory { get; } = new();
 
+    public FakeGeocoder Geocoder { get; } = new();
+
+    public FakeLocalityCatalog Localities { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
@@ -35,7 +39,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<ICategoryReplicaRepository>(Store);
             services.AddSingleton<IProcessedEventRepository>(Store);
             services.AddSingleton<IOutbox>(Store);
+            services.AddSingleton<IPlatformServiceRequestCounter>(Store);
             services.AddSingleton<IUserDirectory>(Directory);
+            services.AddSingleton<IGeocoder>(Geocoder);
+            services.AddSingleton<ILocalityCatalog>(Localities);
             services.Configure<HealthCheckServiceOptions>(o => o.Registrations.Clear());
         });
     }
@@ -164,7 +171,7 @@ public class ServiceRequestApiTests(ApiFactory factory) : IClassFixture<ApiFacto
     }
 
     [Fact]
-    public async Task Crear_SinCategoriaNiUbicacion_Responde400()
+    public async Task Crear_SinCategoria_Responde400SinExigirUbicacion()
     {
         using var client = Client();
 
@@ -173,7 +180,24 @@ public class ServiceRequestApiTests(ApiFactory factory) : IClassFixture<ApiFacto
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var errors = (await Json(response)).GetProperty("errors");
         Assert.True(errors.TryGetProperty("categoryId", out _));
-        Assert.True(errors.TryGetProperty("location", out _));
+        Assert.False(errors.TryGetProperty("location", out _), "Desde 1.3.0 location es opcional.");
+    }
+
+    [Fact]
+    public async Task Crear_UbicacionIncompleta_Responde400()
+    {
+        using var client = Client();
+
+        using var response = await client.PostAsJsonAsync(new Uri("/v1/service-requests", UriKind.Relative), new
+        {
+            categoryId = Category,
+            description = "Fuga de agua en la cocina",
+            location = new { latitude = 4.6486 },
+            addressText = "Calle 63 # 9-45, apto 502",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.True((await Json(response)).GetProperty("errors").TryGetProperty("location", out _));
     }
 
     [Fact]

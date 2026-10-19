@@ -13,6 +13,14 @@ public sealed record CreateServiceRequestRequest(Guid? CategoryId, string? Descr
 
 public sealed record LocationDto(double? Latitude, double? Longitude);
 
+/// <summary>Cuerpo de <c>POST /v1/service-requests/location-preview</c> (contrato 1.3.0).</summary>
+public sealed record LocationPreviewRequest(string? AddressText);
+
+/// <summary>Esquema <c>LocationPreview</c> (1.3.0).</summary>
+public sealed record LocationPreviewResponse(LocationDto Location, LocalityDto Locality, string MatchedAddress);
+
+public sealed record LocalityDto(string Code, string Name);
+
 /// <summary>Esquema <c>ServiceRequest</c> del contrato (1.1.0: <c>assignedAt</c>, <c>technician</c> y <c>client</c>).</summary>
 public sealed record ServiceRequestResponse(
     Guid Id,
@@ -67,6 +75,8 @@ public static class ServiceRequestEndpoints
     {
         var group = app.MapGroup(BasePath);
         group.MapPost("/", CreateAsync).WithName("createServiceRequest").RequireAuthorization(AuthenticatedUser.ClientPolicy);
+        group.MapPost("/location-preview", PreviewLocationAsync).WithName("previewServiceRequestLocation")
+            .RequireAuthorization(AuthenticatedUser.PreviewPolicy);
         group.MapGet("/{id:guid}", GetAsync).WithName("getServiceRequest").RequireAuthorization(AuthenticatedUser.ReadPolicy);
         app.MapGet(TechnicianPath, ListForTechnicianAsync).WithName("listTechnicianServiceRequests")
             .RequireAuthorization(AuthenticatedUser.TechnicianPolicy);
@@ -90,9 +100,10 @@ public static class ServiceRequestEndpoints
             errors["categoryId"] = ["La categoría es obligatoria."];
         }
 
-        if (body.Location?.Latitude is null || body.Location.Longitude is null)
+        // Desde 1.3.0 location es opcional (sin ella se geocodifica addressText), pero si llega debe estar completa.
+        if (body.Location is not null && (body.Location.Latitude is null || body.Location.Longitude is null))
         {
-            errors["location"] = ["La ubicación con latitud y longitud es obligatoria."];
+            errors["location"] = ["La ubicación debe traer latitud y longitud."];
         }
 
         if (errors.Count > 0)
@@ -106,7 +117,7 @@ public static class ServiceRequestEndpoints
             CorrelationId.Get(context),
             body.CategoryId!.Value,
             body.Description,
-            new GeoPoint(body.Location!.Latitude!.Value, body.Location.Longitude!.Value),
+            body.Location is null ? null : new GeoPoint(body.Location.Latitude!.Value, body.Location.Longitude!.Value),
             body.AddressText);
 
         CreateServiceRequestResult result;
@@ -128,6 +139,7 @@ public static class ServiceRequestEndpoints
                 type: Problems.OutOfCoverage,
                 title: "La ubicación está fuera del área de cobertura",
                 detail: "El servicio opera solo en Bogotá D.C."),
+            CreateServiceRequestResult.AddressNotFound => AddressNotFound(),
             _ => Results.Problem(
                 statusCode: StatusCodes.Status422UnprocessableEntity,
                 type: Problems.CategoryUnavailable,
@@ -135,6 +147,48 @@ public static class ServiceRequestEndpoints
                 detail: "La categoría no existe o no está activa en tu empresa."),
         };
     }
+
+    private static async Task<IResult> PreviewLocationAsync(
+        LocationPreviewRequest body,
+        HttpContext context,
+        PreviewLocationHandler handler,
+        CancellationToken cancellationToken)
+    {
+        if (!AuthenticatedUser.TryFrom(context.User, out _))
+        {
+            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "El token no trae usuario ni tenant válidos.");
+        }
+
+        PreviewLocationResult result;
+        try
+        {
+            result = await handler.HandleAsync(body.AddressText, cancellationToken);
+        }
+        catch (DomainValidationException ex)
+        {
+            return ValidationProblem(ex.Errors);
+        }
+
+        return result switch
+        {
+            PreviewLocationResult.Found found => Results.Ok(new LocationPreviewResponse(
+                new LocationDto(found.Location.Latitude, found.Location.Longitude),
+                new LocalityDto(found.Locality.Code, found.Locality.Name),
+                found.MatchedAddress)),
+            PreviewLocationResult.OutOfCoverage => Results.Problem(
+                statusCode: StatusCodes.Status422UnprocessableEntity,
+                type: Problems.OutOfCoverage,
+                title: "La ubicación está fuera del área de cobertura",
+                detail: "La dirección quedó fuera de Bogotá D.C. Comparte tu ubicación."),
+            _ => AddressNotFound(),
+        };
+    }
+
+    private static IResult AddressNotFound() => Results.Problem(
+        statusCode: StatusCodes.Status422UnprocessableEntity,
+        type: Problems.AddressNotFound,
+        title: "No encontramos la dirección",
+        detail: "Comparte tu ubicación para crear la solicitud.");
 
     private static async Task<IResult> GetAsync(
         Guid id,
@@ -199,7 +253,7 @@ public static class ServiceRequestEndpoints
         }
     }
 
-    private static int? ParseOptionalInt(string? value, string field, Dictionary<string, string[]> errors)
+    internal static int? ParseOptionalInt(string? value, string field, Dictionary<string, string[]> errors)
     {
         if (value is null)
         {
@@ -215,7 +269,7 @@ public static class ServiceRequestEndpoints
         return null;
     }
 
-    private static IResult ValidationProblem(IReadOnlyDictionary<string, string[]> errors) =>
+    internal static IResult ValidationProblem(IReadOnlyDictionary<string, string[]> errors) =>
         Results.ValidationProblem(
             errors.ToDictionary(e => e.Key, e => e.Value),
             title: "La solicitud tiene datos inválidos",
