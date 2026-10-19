@@ -21,6 +21,8 @@ GRANT USAGE ON SCHEMA public TO service_request_app, service_request_outbox, ser
 GRANT SELECT, INSERT, UPDATE ON service_requests, service_request_categories TO service_request_app;
 GRANT SELECT, INSERT ON processed_events TO service_request_app;
 GRANT INSERT ON outbox_events TO service_request_app;
+-- Copia del catálogo de localidades (P-09): igual para todos los tenants, sin RLS y de solo lectura.
+GRANT SELECT ON localities TO service_request_app;
 
 -- Rol del publicador del Outbox: solo lee y marca eventos; lo adopta el servicio con SET LOCAL ROLE.
 GRANT SELECT, UPDATE ON outbox_events TO service_request_outbox;

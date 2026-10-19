@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
+using QuickPatch.ServiceRequest.Infrastructure.Geocoding;
 using QuickPatch.ServiceRequest.Infrastructure.Identity;
 using QuickPatch.ServiceRequest.Infrastructure.Messaging;
 using QuickPatch.ServiceRequest.Infrastructure.Options;
@@ -45,6 +46,20 @@ public static class DependencyInjection
             http.Timeout = identity.Timeout;
         });
 
+        // Nominatim propio de la VM de datos (ADR-024, DD 8.3.3); la espera total la controla el geocodificador.
+        var geocoding = configuration.GetSection(GeocodingOptions.Section).Get<GeocodingOptions>() ?? new GeocodingOptions();
+        services.AddSingleton(geocoding);
+        services.AddHttpClient<IGeocoder, NominatimGeocoder>(http =>
+        {
+            if (!string.IsNullOrWhiteSpace(geocoding.NominatimUrl))
+            {
+                http.BaseAddress = new Uri(geocoding.NominatimUrl.TrimEnd('/') + "/");
+            }
+
+            http.Timeout = geocoding.Timeout + TimeSpan.FromSeconds(1);
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("quickpatch-service-request");
+        });
+
         services.AddSingleton(sp =>
         {
             var c = sp.GetRequiredService<IOptions<CoverageOptions>>().Value;
@@ -59,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantUnitOfWork, TenantUnitOfWork>();
         services.AddScoped<IServiceRequestRepository, ServiceRequestRepository>();
         services.AddScoped<ICategoryReplicaRepository, CategoryReplicaRepository>();
+        services.AddScoped<ILocalityCatalog, LocalityCatalog>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<IOutbox, EfOutbox>();
         services.AddScoped<IPlatformServiceRequestCounter, PlatformServiceRequestCounter>();

@@ -21,6 +21,11 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Datos de las migraciones que se cargan con SQL (por ejemplo, las localidades de P-09). -->
+    <EmbeddedResource Include="Persistence\Migrations\Sql\*.sql" LogicalName="Migrations.%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

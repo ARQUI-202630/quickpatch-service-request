@@ -42,11 +42,13 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
 
     public FakeIdentityServer Identity { get; } = new();
 
+    public FakeNominatimServer Nominatim { get; } = new();
+
     public WebApplicationFactory<Program> App { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), kafka.StartAsync(), Identity.StartAsync());
+        await Task.WhenAll(postgres.StartAsync(), kafka.StartAsync(), Identity.StartAsync(), Nominatim.StartAsync());
 
         var options = new DbContextOptionsBuilder<ServiceRequestDbContext>()
             .UseNpgsql(AdminConnectionString, n => n.UseNetTopologySuite())
@@ -78,6 +80,7 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
             builder.UseSetting("Outbox:PollInterval", "00:00:00.200");
             builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
             builder.UseSetting("Identity:BaseUrl", Identity.BaseUrl);
+            builder.UseSetting("Geocoding:NominatimUrl", Nominatim.BaseUrl);
         });
         _ = App.Server;
     }
@@ -89,7 +92,8 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
             await App.DisposeAsync();
         }
 
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), kafka.DisposeAsync().AsTask(), Identity.DisposeAsync().AsTask());
+        await Task.WhenAll(postgres.DisposeAsync().AsTask(), kafka.DisposeAsync().AsTask(), Identity.DisposeAsync().AsTask(),
+            Nominatim.DisposeAsync().AsTask());
     }
 
     public async Task ExecuteAdminAsync(string sql)

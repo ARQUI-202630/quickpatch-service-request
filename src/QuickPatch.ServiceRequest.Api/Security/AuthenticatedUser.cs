@@ -18,6 +18,10 @@ public sealed record AuthenticatedUser(Guid UserId, Guid TenantId, string Role)
     public const string ClientRole = "cliente";
     public const string ClientPolicy = "SoloCliente";
     public const string TechnicianRole = "tecnico";
+    public const string CompanyContactRole = "empresa_contacto";
+
+    /// <summary>Vista previa de la ubicación (contrato 1.3.0): los roles que crean solicitudes.</summary>
+    public const string PreviewPolicy = "CreaSolicitudes";
 
     /// <summary>Lista de solicitudes del técnico (contrato 1.2.0).</summary>
     public const string TechnicianPolicy = "SoloTecnico";
@@ -89,6 +93,7 @@ public static class AuthenticationSetup
             .AddPolicy(AuthenticatedUser.ClientPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole))
             .AddPolicy(AuthenticatedUser.ReadPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.TechnicianRole))
             .AddPolicy(AuthenticatedUser.TechnicianPolicy, policy => policy.RequireRole(AuthenticatedUser.TechnicianRole))
+            .AddPolicy(AuthenticatedUser.PreviewPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.CompanyContactRole))
             .AddPolicy(AuthenticatedUser.AdminTenantPolicy, policy => policy.RequireRole(AuthenticatedUser.AdminTenantRole))
             .AddPolicy(AuthenticatedUser.PlatformAdminPolicy, policy => policy.RequireRole(AuthenticatedUser.PlatformAdminRole));
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, ForbiddenAuditHandler>();

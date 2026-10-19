@@ -27,17 +27,22 @@ public abstract record CreateServiceRequestResult
 
     /// <summary>RN-SR10: la categoría no existe o no está activa en el tenant.</summary>
     public sealed record CategoryUnavailable : CreateServiceRequestResult;
+
+    /// <summary>Llegó sin <c>location</c> y la dirección no se pudo geocodificar (contrato 1.3.0, ADR-024).</summary>
+    public sealed record AddressNotFound : CreateServiceRequestResult;
 }
 
 /// <summary>
 /// Caso de uso de creación de solicitud (RF-07, SCRUM-27): valida, guarda la solicitud en
 /// <c>buscando_tecnico</c> y registra <c>service-request.created</c> en el Outbox en la misma transacción.
+/// Sin <c>location</c>, geocodifica <c>addressText</c> antes de abrir la transacción (contrato 1.3.0, DD 8.3.3).
 /// </summary>
 public sealed class CreateServiceRequestHandler(
     ITenantUnitOfWork unitOfWork,
     IServiceRequestRepository serviceRequests,
     ICategoryReplicaRepository categories,
     IOutbox outbox,
+    IGeocoder geocoder,
     CoverageArea coverageArea,
     TimeProvider clock)
 {
@@ -46,13 +51,28 @@ public sealed class CreateServiceRequestHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        var location = command.Location;
+        if (location is null)
+        {
+            // Primero el resto de los campos: no se geocodifica una solicitud que de todas formas se rechazaría.
+            DomainServiceRequest.ValidateFieldsWithoutLocation(
+                command.TenantId, command.ClientId, command.CategoryId, command.Description, command.AddressText);
+            var geocoded = await geocoder.GeocodeAsync(command.AddressText!.Trim(), cancellationToken);
+            if (geocoded is null)
+            {
+                return new CreateServiceRequestResult.AddressNotFound();
+            }
+
+            location = geocoded.Location;
+        }
+
         var now = clock.GetUtcNow();
         var serviceRequest = DomainServiceRequest.Create(
             command.TenantId,
             command.ClientId,
             command.CategoryId,
             command.Description,
-            command.Location,
+            location,
             command.AddressText,
             now);
 
