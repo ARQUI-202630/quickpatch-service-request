@@ -40,8 +40,9 @@ public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServ
 {
     public void Add(DomainServiceRequest serviceRequest) => db.ServiceRequests.Add(serviceRequest);
 
+    // FOR UPDATE: la fila queda bloqueada hasta el final de la transacción; RLS sigue filtrando por el tenant.
     public Task<DomainServiceRequest?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
-        db.ServiceRequests.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+        db.ServiceRequests.FromSql($"SELECT * FROM service_requests WHERE id = {id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
 
     public Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken) =>
         db.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ClientId == clientId, cancellationToken);
@@ -155,5 +156,23 @@ public sealed class LocalityCatalog(ServiceRequestDbContext db) : ILocalityCatal
             .Select(l => new { l.Code, l.Name })
             .FirstOrDefaultAsync(cancellationToken);
         return row is null ? null : new Locality(row.Code, row.Name);
+    }
+}
+
+public sealed class EfAuditLog(ServiceRequestDbContext db) : IAuditLog
+{
+    public void Add(AuditEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        db.AuditLogs.Add(new AuditLogRecord
+        {
+            Id = entry.Id,
+            TenantId = entry.TenantId,
+            ActorUserId = entry.ActorUserId,
+            Action = entry.Action,
+            TargetId = entry.TargetId,
+            Metadata = entry.Metadata,
+            CreatedAt = entry.CreatedAt,
+        });
     }
 }

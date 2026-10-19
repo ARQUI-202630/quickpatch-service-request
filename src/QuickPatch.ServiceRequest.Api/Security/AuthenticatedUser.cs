@@ -29,6 +29,9 @@ public sealed record AuthenticatedUser(Guid UserId, Guid TenantId, string Role)
     public const string AdminTenantRole = "admin_tenant";
     public const string PlatformAdminRole = "admin_plataforma";
 
+    /// <summary>Cancelación (contrato 1.5.0, RN-SR8): el cliente dueño y el administrador del tenant.</summary>
+    public const string CancelPolicy = "ClienteOAdminTenant";
+
     /// <summary>Lista y conteos del panel del tenant (contrato 1.4.0).</summary>
     public const string AdminTenantPolicy = "SoloAdminTenant";
 
@@ -94,6 +97,7 @@ public static class AuthenticationSetup
             .AddPolicy(AuthenticatedUser.ReadPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.TechnicianRole))
             .AddPolicy(AuthenticatedUser.TechnicianPolicy, policy => policy.RequireRole(AuthenticatedUser.TechnicianRole))
             .AddPolicy(AuthenticatedUser.PreviewPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.CompanyContactRole))
+            .AddPolicy(AuthenticatedUser.CancelPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.AdminTenantRole))
             .AddPolicy(AuthenticatedUser.AdminTenantPolicy, policy => policy.RequireRole(AuthenticatedUser.AdminTenantRole))
             .AddPolicy(AuthenticatedUser.PlatformAdminPolicy, policy => policy.RequireRole(AuthenticatedUser.PlatformAdminRole));
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, ForbiddenAuditHandler>();

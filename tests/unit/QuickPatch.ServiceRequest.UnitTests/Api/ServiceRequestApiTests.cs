@@ -40,6 +40,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IProcessedEventRepository>(Store);
             services.AddSingleton<IOutbox>(Store);
             services.AddSingleton<IPlatformServiceRequestCounter>(Store);
+            services.AddSingleton<IAuditLog>(Store);
             services.AddSingleton<IUserDirectory>(Directory);
             services.AddSingleton<IGeocoder>(Geocoder);
             services.AddSingleton<ILocalityCatalog>(Localities);

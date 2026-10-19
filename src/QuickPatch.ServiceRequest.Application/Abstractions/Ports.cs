@@ -20,7 +20,11 @@ public interface IServiceRequestRepository
 {
     void Add(DomainServiceRequest serviceRequest);
 
-    /// <summary>Busca la solicitud en el tenant de la transacción para modificarla; null si no existe.</summary>
+    /// <summary>
+    /// Busca la solicitud en el tenant de la transacción para modificarla y bloquea su fila hasta el final de la
+    /// transacción (<c>SELECT ... FOR UPDATE</c>): la cancelación y los eventos de Matching no se pisan (DD 8.3.9). Null si
+    /// no existe.
+    /// </summary>
     Task<DomainServiceRequest?> FindByIdAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>Busca la solicitud del cliente; devuelve null si no existe o es de otro cliente.</summary>
@@ -88,6 +92,18 @@ public interface IOutbox
 {
     void Enqueue(OutboxMessage message);
 }
+
+/// <summary>
+/// Auditoría de ServiceRequest (tabla <c>audit_logs</c> de <c>db_service_request</c>, DD 5.14, v5.3): la fila se guarda en
+/// la misma transacción que la operación. Solo se insertan filas (RN-A1).
+/// </summary>
+public interface IAuditLog
+{
+    void Add(AuditEntry entry);
+}
+
+/// <summary>Fila de <c>audit_logs</c>. <see cref="Metadata"/> es JSON y nunca lleva datos personales del usuario.</summary>
+public sealed record AuditEntry(Guid Id, Guid TenantId, Guid ActorUserId, string Action, Guid TargetId, string Metadata, DateTimeOffset CreatedAt);
 
 /// <summary>Mensaje pendiente de publicar en Kafka. <see cref="Id"/> se publica como <c>eventId</c>.</summary>
 public sealed record OutboxMessage(Guid Id, Guid TenantId, Guid AggregateId, string EventType, string Payload);

@@ -20,6 +20,8 @@ GRANT USAGE ON SCHEMA public TO service_request_app, service_request_outbox, ser
 -- Rol del servicio: todo bajo RLS.
 GRANT SELECT, INSERT, UPDATE ON service_requests, service_request_categories TO service_request_app;
 GRANT SELECT, INSERT ON processed_events TO service_request_app;
+-- Auditoría propia (DD 5.14, v5.3): solo se insertan y se leen filas (RN-A1).
+GRANT INSERT, SELECT ON audit_logs TO service_request_app;
 GRANT INSERT ON outbox_events TO service_request_app;
 -- Copia del catálogo de localidades (P-09): igual para todos los tenants, sin RLS y de solo lectura.
 GRANT SELECT ON localities TO service_request_app;

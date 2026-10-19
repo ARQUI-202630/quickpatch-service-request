@@ -23,6 +23,8 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
 
     public DbSet<LocalityRecord> Localities => Set<LocalityRecord>();
 
+    public DbSet<AuditLogRecord> AuditLogs => Set<AuditLogRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresExtension("postgis");
@@ -49,8 +51,11 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property(x => x.AssignedAt).HasColumnName("assigned_at");
             e.Property<DateTimeOffset?>("StartedAt").HasColumnName("started_at");
             e.Property<DateTimeOffset?>("CompletedAt").HasColumnName("completed_at");
-            e.Property<DateTimeOffset?>("CancelledAt").HasColumnName("cancelled_at");
-            e.Property<string?>("CancellationReason").HasColumnName("cancellation_reason").HasColumnType("text");
+            e.Property(x => x.CancelledAt).HasColumnName("cancelled_at");
+            e.Property(x => x.CancellationReason).HasColumnName("cancellation_reason").HasColumnType("text");
+            // RF-36, RN-SR8 (DD 5.5, v5.3): quién canceló; el CHECK lo agrega la migración CancelacionYAuditoria.
+            e.Property(x => x.CancelledBy).HasColumnName("cancelled_by");
+            e.Property(x => x.CancelledByType).HasColumnName("cancelled_by_type").HasMaxLength(15);
             e.HasIndex(x => new { x.TenantId, x.ClientId }).HasDatabaseName("ix_service_requests_tenant_client");
             // Historial del técnico (RF-17, DD 5: índice sobre technician_id y status).
             e.HasIndex(x => new { x.TenantId, x.TechnicianId, x.Status }).HasDatabaseName("ix_service_requests_tenant_technician_status");
@@ -91,6 +96,21 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property(x => x.TenantId).HasColumnName("tenant_id");
             e.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(100);
             e.Property(x => x.ProcessedAt).HasColumnName("processed_at");
+        });
+
+        // Auditoría propia de ServiceRequest (DD 5.14, v5.3): con tenant y RLS; el rol de la aplicación solo inserta y lee (RN-A1).
+        modelBuilder.Entity<AuditLogRecord>(e =>
+        {
+            e.ToTable("audit_logs");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            e.Property(x => x.TenantId).HasColumnName("tenant_id");
+            e.Property(x => x.ActorUserId).HasColumnName("actor_user_id");
+            e.Property(x => x.Action).HasColumnName("action").HasMaxLength(100);
+            e.Property(x => x.TargetId).HasColumnName("target_id");
+            e.Property(x => x.Metadata).HasColumnName("metadata").HasColumnType("jsonb");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.HasIndex(x => new { x.TenantId, x.CreatedAt }).HasDatabaseName("ix_audit_logs_tenant_created");
         });
 
         // Copia de solo lectura del catálogo de Matching (P-09): igual para todos los tenants, sin tenant_id ni RLS.
@@ -146,4 +166,22 @@ public sealed class ProcessedEventRecord
     public string EventType { get; set; } = string.Empty;
 
     public DateTimeOffset ProcessedAt { get; set; }
+}
+
+/// <summary>Fila de <c>audit_logs</c> de ServiceRequest (DD 5.14, v5.3).</summary>
+public sealed class AuditLogRecord
+{
+    public Guid Id { get; set; }
+
+    public Guid TenantId { get; set; }
+
+    public Guid? ActorUserId { get; set; }
+
+    public string Action { get; set; } = string.Empty;
+
+    public Guid? TargetId { get; set; }
+
+    public string? Metadata { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
 }

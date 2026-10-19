@@ -77,6 +77,7 @@ public static class DependencyInjection
         services.AddScoped<ILocalityCatalog, LocalityCatalog>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<IOutbox, EfOutbox>();
+        services.AddScoped<IAuditLog, EfAuditLog>();
         services.AddScoped<IPlatformServiceRequestCounter, PlatformServiceRequestCounter>();
 
         services.AddHealthChecks().AddDbContextCheck<ServiceRequestDbContext>("postgresql", tags: [ReadyTag]);
