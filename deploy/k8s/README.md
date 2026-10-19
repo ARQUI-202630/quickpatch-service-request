@@ -22,6 +22,6 @@ kubectl -n quickpatch create secret generic service-request-secretos \
 ## Primer despliegue
 
 1. Base: `db_service_request` con dueño `service_request_migrator` y el rol `service_request_app` (Ansible). La extensión PostGIS debe existir antes de la primera migración (`postgis_databases` incluye `service_request`): `service_request_migrator` no puede crearla.
-2. Reemplazar en el ConfigMap `<vm-mensajeria>` por la IP de Kafka del ambiente y `<vm-datos>` por la de su VM de datos (Nominatim en el 8088: `10.43.98.29` en QA), y `kubectl apply -f deploy/k8s/service-request.yaml`. El pod queda esperando la imagen (`:pendiente`).
+2. Reemplazar `<vm-mensajeria>` y `<vm-datos>` en el ConfigMap por las IP de Kafka y de la VM de datos del ambiente y `kubectl apply -f deploy/k8s/service-request.yaml`. El pod queda esperando la imagen (`:pendiente`).
 3. Push a `release/*`: el pipeline publica la imagen y la fija en el Deployment; el init container aplica las migraciones.
 4. Solo la primera vez, un administrador de la base ejecuta `db/roles.sql` y reinicia el servicio con `kubectl -n quickpatch rollout restart deployment/service-request`.

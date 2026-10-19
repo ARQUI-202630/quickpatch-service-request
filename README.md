@@ -57,6 +57,7 @@ dotnet run --project src/QuickPatch.ServiceRequest.Api
 |Nombre y teléfono desde Identity con la consulta interna por lote, reenviando el JWT del usuario; si Identity no responde en `Identity:Timeout`, el detalle sale con los nombres en null|`openapi/identity-internal.v1.yaml` 1.0.0|SCRUM-91|
 |Réplica local de categorías desde `catalog.category-changed` (sin llamadas a Catalog, SAD 4.3)|`events/catalog.category-changed.v1.json`|SCRUM-27|
 |Estado por los eventos de Matching: `matching.technician-assigned` (`buscando_tecnico` → `asignado`, guarda `technician_id` y `assigned_at`), `matching.no-technician-available` (`buscando_tecnico` → `en_espera`) y `matching.search-resumed` (`en_espera` → `buscando_tecnico`). Un evento más viejo que el último aplicado (`matching_updated_at`) se descarta, porque llegan por topics distintos (ADR-017)|`events/matching.*.v1.json` (`quickpatch-kafka` v0.3.0)|SCRUM-29 / SCRUM-460, SCRUM-91|
+|Cada cambio de estado aplicado publica `service-request.status-changed` por Outbox en la misma transacción, con `previousStatus`, `status` y el técnico si lo hay. Un evento de Matching viejo, repetido o que no corresponde al estado no lo publica, así que Communication avisa solo lo que pasó|`events/service-request.status-changed.v1.json` (`quickpatch-kafka`, SCRUM-466)|SCRUM-31 / SCRUM-466|
 
 Reglas aplicadas (DD, sección 7.4): RN-SR1, RN-SR9 (cobertura de Bogotá, configurable en `Coverage`), RN-SR10 (categoría activa en el tenant) y RN-SR11 (longitudes).
 
