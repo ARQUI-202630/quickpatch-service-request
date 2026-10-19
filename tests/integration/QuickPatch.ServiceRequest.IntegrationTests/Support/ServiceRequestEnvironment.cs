@@ -74,6 +74,7 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
             builder.UseSetting("ConnectionStrings:ServiceRequest", AppConnectionString);
             builder.UseSetting("Kafka:BootstrapServers", KafkaServers);
             builder.UseSetting("Outbox:PublisherRole", "service_request_outbox");
+            builder.UseSetting("Platform:ReadRole", "service_request_platform");
             builder.UseSetting("Outbox:PollInterval", "00:00:00.200");
             builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
             builder.UseSetting("Identity:BaseUrl", Identity.BaseUrl);

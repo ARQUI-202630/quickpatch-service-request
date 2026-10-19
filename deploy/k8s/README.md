@@ -25,3 +25,5 @@ kubectl -n quickpatch create secret generic service-request-secretos \
 2. Reemplazar `<vm-mensajeria>` y `<vm-datos>` en el ConfigMap por las IP de Kafka y de la VM de datos del ambiente y `kubectl apply -f deploy/k8s/service-request.yaml`. El pod queda esperando la imagen (`:pendiente`).
 3. Push a `release/*`: el pipeline publica la imagen y la fija en el Deployment; el init container aplica las migraciones.
 4. Solo la primera vez, un administrador de la base ejecuta `db/roles.sql` y reinicia el servicio con `kubectl -n quickpatch rollout restart deployment/service-request`.
+
+**Desde SCRUM-103** (`roles.sql` con `service_request_platform`, `Platform__ReadRole` en el ConfigMap y las rutas `/v1/admin/service-requests` y `/v1/platform/service-requests` del Ingress): volver a aplicar `db/roles.sql` (playbook `aplicar-roles-db.yml` de quickpatch, se puede repetir) y `kubectl apply -f deploy/k8s/service-request.yaml` antes del release. Sin el rol, la vista de plataforma responde 500 al adoptarlo.

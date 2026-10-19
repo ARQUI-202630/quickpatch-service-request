@@ -22,6 +22,15 @@ public sealed record AuthenticatedUser(Guid UserId, Guid TenantId, string Role)
     /// <summary>Lista de solicitudes del técnico (contrato 1.2.0).</summary>
     public const string TechnicianPolicy = "SoloTecnico";
 
+    public const string AdminTenantRole = "admin_tenant";
+    public const string PlatformAdminRole = "admin_plataforma";
+
+    /// <summary>Lista y conteos del panel del tenant (contrato 1.4.0).</summary>
+    public const string AdminTenantPolicy = "SoloAdminTenant";
+
+    /// <summary>Conteos de todos los tenants (contrato 1.4.0, DD 10.4).</summary>
+    public const string PlatformAdminPolicy = "SoloAdminPlataforma";
+
     /// <summary>Consulta del detalle (contrato 1.1.0): el cliente dueño y el técnico asignado.</summary>
     public const string ReadPolicy = "ClienteOTecnico";
 
@@ -79,7 +88,9 @@ public static class AuthenticationSetup
         services.AddAuthorizationBuilder()
             .AddPolicy(AuthenticatedUser.ClientPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole))
             .AddPolicy(AuthenticatedUser.ReadPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.TechnicianRole))
-            .AddPolicy(AuthenticatedUser.TechnicianPolicy, policy => policy.RequireRole(AuthenticatedUser.TechnicianRole));
+            .AddPolicy(AuthenticatedUser.TechnicianPolicy, policy => policy.RequireRole(AuthenticatedUser.TechnicianRole))
+            .AddPolicy(AuthenticatedUser.AdminTenantPolicy, policy => policy.RequireRole(AuthenticatedUser.AdminTenantRole))
+            .AddPolicy(AuthenticatedUser.PlatformAdminPolicy, policy => policy.RequireRole(AuthenticatedUser.PlatformAdminRole));
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, ForbiddenAuditHandler>();
 
         return services;

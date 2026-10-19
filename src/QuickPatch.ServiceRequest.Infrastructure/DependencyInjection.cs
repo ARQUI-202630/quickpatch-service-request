@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.Configure<CoverageOptions>(configuration.GetSection(CoverageOptions.Section));
         services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.Section));
         services.Configure<OutboxOptions>(configuration.GetSection(OutboxOptions.Section));
+        services.Configure<PlatformOptions>(configuration.GetSection(PlatformOptions.Section));
 
         // Consulta interna por lote a Identity (identity-internal.v1.yaml, DD V4 8.3.4).
         var identity = configuration.GetSection(IdentityOptions.Section).Get<IdentityOptions>() ?? new IdentityOptions();
@@ -60,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<ICategoryReplicaRepository, CategoryReplicaRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<IOutbox, EfOutbox>();
+        services.AddScoped<IPlatformServiceRequestCounter, PlatformServiceRequestCounter>();
 
         services.AddHealthChecks().AddDbContextCheck<ServiceRequestDbContext>("postgresql", tags: [ReadyTag]);
 

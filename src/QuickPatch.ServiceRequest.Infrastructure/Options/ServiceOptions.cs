@@ -41,3 +41,15 @@ public sealed class OutboxOptions
 
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
 }
+
+/// <summary>Vista de plataforma del panel operativo (DD 10.4, DEP-15). Sección <c>Platform</c>.</summary>
+public sealed class PlatformOptions
+{
+    public const string Section = "Platform";
+
+    /// <summary>
+    /// Rol <c>service_request_platform</c> (DD 10.2) que se adopta con <c>SET LOCAL ROLE</c> para contar las solicitudes de
+    /// todos los tenants. Vacío solo en desarrollo local: sin el rol, RLS no deja ver nada y los conteos salen vacíos.
+    /// </summary>
+    public string ReadRole { get; set; } = string.Empty;
+}
