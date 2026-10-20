@@ -41,6 +41,9 @@ public sealed record AuthenticatedUser(Guid UserId, Guid TenantId, string Role)
     /// <summary>Consulta del detalle (contrato 1.1.0): el cliente dueño y el técnico asignado.</summary>
     public const string ReadPolicy = "ClienteOTecnico";
 
+    /// <summary>Evidencias (contrato 1.7.0): el cliente dueño, el técnico asignado y el <c>admin_tenant</c>.</summary>
+    public const string EvidenceReadPolicy = "ClienteTecnicoOAdminTenant";
+
     public static bool TryFrom(ClaimsPrincipal principal, out AuthenticatedUser user)
     {
         ArgumentNullException.ThrowIfNull(principal);
@@ -95,6 +98,8 @@ public static class AuthenticationSetup
         services.AddAuthorizationBuilder()
             .AddPolicy(AuthenticatedUser.ClientPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole))
             .AddPolicy(AuthenticatedUser.ReadPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.TechnicianRole))
+            .AddPolicy(AuthenticatedUser.EvidenceReadPolicy, policy => policy.RequireRole(
+                AuthenticatedUser.ClientRole, AuthenticatedUser.TechnicianRole, AuthenticatedUser.AdminTenantRole))
             .AddPolicy(AuthenticatedUser.TechnicianPolicy, policy => policy.RequireRole(AuthenticatedUser.TechnicianRole))
             .AddPolicy(AuthenticatedUser.PreviewPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.CompanyContactRole))
             .AddPolicy(AuthenticatedUser.CancelPolicy, policy => policy.RequireRole(AuthenticatedUser.ClientRole, AuthenticatedUser.AdminTenantRole))

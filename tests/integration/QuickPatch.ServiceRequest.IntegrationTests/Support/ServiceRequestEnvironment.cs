@@ -1,6 +1,9 @@
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -17,15 +20,38 @@ using Testcontainers.Redis;
 namespace QuickPatch.ServiceRequest.IntegrationTests.Support;
 
 /// <summary>
-/// Ambiente real para las pruebas: PostgreSQL 16 + PostGIS, Kafka y Redis en contenedores, con las migraciones
+/// Ambiente real para las pruebas: PostgreSQL 16 + PostGIS, Kafka, Redis y Garage en contenedores, con las migraciones
 /// aplicadas, los roles del DD 10.2 y el servicio conectado con el rol <c>service_request_app</c> (sujeto a RLS). Redis tiene
 /// el mismo usuario ACL que en QA (<c>service-request</c>, solo claves <c>service-request:*</c> y sin comandos peligrosos).
+/// Garage es la misma versión que en QA, con el bucket <c>service-request-evidencias</c> y una llave que solo ve ese bucket,
+/// configurado con los mismos comandos que <c>tasks/garage.yml</c> de Ansible.
 /// </summary>
 public sealed class ServiceRequestEnvironment : IAsyncLifetime
 {
     public const string AppPassword = "app-pruebas";
     public const string RedisUser = "service-request";
     public const string RedisPassword = "redis-pruebas";
+    public const string EvidenceBucket = "service-request-evidencias";
+
+    // Valores de prueba con el formato de Garage (llave GK + 24 hexadecimales, secreto de 64).
+    public const string GarageKeyId = "GK0123456789abcdef01234567";
+    public const string GarageSecret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    private const int GarageS3Port = 3900;
+
+    private const string GarageConfig = """
+        metadata_dir = "/var/lib/garage/meta"
+        data_dir = "/var/lib/garage/data"
+        db_engine = "sqlite"
+        replication_factor = 1
+        rpc_bind_addr = "127.0.0.1:3901"
+        rpc_public_addr = "127.0.0.1:3901"
+        rpc_secret = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+
+        [s3_api]
+        s3_region = "garage"
+        api_bind_addr = "0.0.0.0:3900"
+        root_domain = ".s3.garage.localhost"
+        """;
 
     private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgis/postgis:16-3.5")
         .WithDatabase("db_service_request")
@@ -36,6 +62,15 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
 
     private readonly RedisContainer redis = new RedisBuilder("redis:7.4-alpine")
         .Build();
+
+    private readonly IContainer garage = new ContainerBuilder("dxflrs/garage:v2.4.1")
+        .WithResourceMapping(System.Text.Encoding.UTF8.GetBytes(GarageConfig), "/etc/garage.toml")
+        .WithPortBinding(GarageS3Port, true)
+        // La imagen no trae shell: se espera el mensaje de arranque de la API S3.
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("S3 API server listening"))
+        .Build();
+
+    public string GarageEndpoint => $"http://{garage.Hostname}:{garage.GetMappedPublicPort(GarageS3Port)}";
 
     public string RedisEndpoint => $"{redis.Hostname}:{redis.GetMappedPublicPort(RedisBuilder.RedisPort)}";
 
@@ -57,7 +92,9 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), kafka.StartAsync(), redis.StartAsync(), Identity.StartAsync(), Nominatim.StartAsync());
+        await Task.WhenAll(
+            postgres.StartAsync(), kafka.StartAsync(), redis.StartAsync(), garage.StartAsync(), Identity.StartAsync(), Nominatim.StartAsync());
+        await ConfigureGarageAsync();
 
         // Igual que templates/redis-users.acl.j2 de Ansible.
         var acl = await redis.ExecAsync(["redis-cli", "ACL", "SETUSER", RedisUser, "on", $">{RedisPassword}",
@@ -103,6 +140,9 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
             builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
             builder.UseSetting("Identity:BaseUrl", Identity.BaseUrl);
             builder.UseSetting("Geocoding:NominatimUrl", Nominatim.BaseUrl);
+            builder.UseSetting("Evidence:Endpoint", GarageEndpoint);
+            builder.UseSetting("Evidence:AccessKey", GarageKeyId);
+            builder.UseSetting("Evidence:SecretKey", GarageSecret);
         });
         _ = App.Server;
     }
@@ -115,8 +155,39 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
         }
 
         await Task.WhenAll(postgres.DisposeAsync().AsTask(), kafka.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask(),
+            garage.DisposeAsync().AsTask(),
             Identity.DisposeAsync().AsTask(),
             Nominatim.DisposeAsync().AsTask());
+    }
+
+    /// <summary>Nodo único en el layout, llave importada, bucket y permiso de la llave solo sobre ese bucket.</summary>
+    private async Task ConfigureGarageAsync()
+    {
+        var nodeId = string.Empty;
+        for (var attempt = 0; attempt < 30 && nodeId.Length < 16; attempt++)
+        {
+            var id = await garage.ExecAsync(["/garage", "node", "id", "-q"]);
+            nodeId = id.ExitCode == 0 ? id.Stdout.Trim().Split('@')[0] : string.Empty;
+            if (nodeId.Length < 16)
+            {
+                await Task.Delay(500);
+            }
+        }
+
+        await GarageAsync("layout", "assign", "-z", "dc1", "-c", "1G", nodeId[..16]);
+        await GarageAsync("layout", "apply", "--version", "1");
+        await GarageAsync("key", "import", "--yes", "-n", "service-request", GarageKeyId, GarageSecret);
+        await GarageAsync("bucket", "create", EvidenceBucket);
+        await GarageAsync("bucket", "allow", "--read", "--write", EvidenceBucket, "--key", "service-request");
+    }
+
+    private async Task GarageAsync(params string[] args)
+    {
+        var result = await garage.ExecAsync(["/garage", .. args]);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"garage {string.Join(' ', args)} falló: {result.Stderr}");
+        }
     }
 
     public async Task ExecuteAdminAsync(string sql)

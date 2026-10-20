@@ -21,7 +21,10 @@ public sealed record LocationPreviewResponse(LocationDto Location, LocalityDto L
 
 public sealed record LocalityDto(string Code, string Name);
 
-/// <summary>Esquema <c>ServiceRequest</c> del contrato (1.1.0: <c>assignedAt</c>, <c>technician</c> y <c>client</c>).</summary>
+/// <summary>
+/// Esquema <c>ServiceRequest</c> del contrato (1.1.0: <c>assignedAt</c>, <c>technician</c> y <c>client</c>; 1.5.0: la cancelación;
+/// 1.7.0: <c>startedAt</c> y <c>completedAt</c>).
+/// </summary>
 public sealed record ServiceRequestResponse(
     Guid Id,
     string Status,
@@ -35,7 +38,9 @@ public sealed record ServiceRequestResponse(
     TechnicianView? Technician,
     ClientView? Client,
     DateTimeOffset? CancelledAt,
-    string? CancellationReason)
+    string? CancellationReason,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt)
 {
     public static ServiceRequestResponse From(DomainServiceRequest s, TechnicianView? technician = null, ClientView? client = null) => new(
         s.Id,
@@ -50,7 +55,9 @@ public sealed record ServiceRequestResponse(
         technician,
         client,
         s.CancelledAt,
-        s.CancellationReason);
+        s.CancellationReason,
+        s.StartedAt,
+        s.CompletedAt);
 }
 
 /// <summary>Cuerpo de <c>POST /v1/service-requests/{id}/cancel</c> (contrato 1.5.0).</summary>

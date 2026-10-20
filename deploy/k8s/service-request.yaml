@@ -33,6 +33,11 @@ data:
   # Redis de la VM de datos (coordinación del vencimiento, DD 7.13): usuario ACL service-request, solo claves service-request:*.
   Redis__Endpoint: "<vm-datos>:6379"
   Redis__User: "service-request"
+  # Fotos de evidencia (RF-15, SCRUM-94): API S3 de Garage en la VM de mensajería y almacenamiento (ADR-016), bucket con la
+  # llave service-request, que solo ve ese bucket. Las claves de la llave van en el Secret.
+  Evidence__Endpoint: "http://<vm-mensajeria>:9000"
+  Evidence__Bucket: "service-request-evidencias"
+  Evidence__Region: "garage"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -82,6 +87,10 @@ spec:
               valueFrom: { secretKeyRef: { name: service-request-secretos, key: jwt-public-key } }
             - name: Redis__Password
               valueFrom: { secretKeyRef: { name: service-request-secretos, key: redis-password } }
+            - name: Evidence__AccessKey
+              valueFrom: { secretKeyRef: { name: service-request-secretos, key: garage-access-key } }
+            - name: Evidence__SecretKey
+              valueFrom: { secretKeyRef: { name: service-request-secretos, key: garage-secret-key } }
           readinessProbe:
             httpGet: { path: /health/ready, port: http }
             periodSeconds: 10

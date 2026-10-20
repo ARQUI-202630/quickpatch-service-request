@@ -34,6 +34,16 @@ public static class ServiceRequestEvents
         Build(request, EventTypes.QuoteRejected, correlationId, now,
             new QuoteRejectedData(request.Id, quote.Id, quote.TechnicianId, remainingQuotes));
 
+    public static OutboxMessage Started(DomainServiceRequest request, Guid correlationId, DateTimeOffset now) =>
+        Build(request, EventTypes.ServiceStarted, correlationId, now,
+            new ServiceStartedData(request.Id, request.ClientId, request.TechnicianId!.Value, request.StartedAt!.Value));
+
+    public static OutboxMessage Completed(DomainServiceRequest request, Quote acceptedQuote, Guid correlationId, DateTimeOffset now) =>
+        Build(request, EventTypes.ServiceCompleted, correlationId, now,
+            new ServiceCompletedData(
+                request.Id, request.ClientId, null, request.TechnicianId!.Value, acceptedQuote.Id,
+                Quote.FormatMoney(acceptedQuote.TotalAmount), request.CompletedAt!.Value));
+
     private static OutboxMessage Build<TData>(
         DomainServiceRequest request, string eventType, Guid correlationId, DateTimeOffset now, TData data)
     {

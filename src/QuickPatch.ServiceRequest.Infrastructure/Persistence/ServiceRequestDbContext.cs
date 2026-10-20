@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
@@ -11,7 +12,7 @@ using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.Se
 
 namespace QuickPatch.ServiceRequest.Infrastructure.Persistence;
 
-/// <summary>Base de datos de ServiceRequest Service (DD, secciones 5.5, 5.11, 5.15, 5.16, 5.17 y la copia de 5.18).</summary>
+/// <summary>Base de datos de ServiceRequest Service (DD, secciones 5.5, 5.10, 5.11, 5.15, 5.16, 5.17 y la copia de 5.18).</summary>
 public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbContext> options) : DbContext(options)
 {
     public DbSet<DomainServiceRequest> ServiceRequests => Set<DomainServiceRequest>();
@@ -19,6 +20,8 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
     public DbSet<CategoryReplica> Categories => Set<CategoryReplica>();
 
     public DbSet<Quote> Quotes => Set<Quote>();
+
+    public DbSet<ServiceEvidence> Evidence => Set<ServiceEvidence>();
 
     public DbSet<OutboxEventRecord> OutboxEvents => Set<OutboxEventRecord>();
 
@@ -52,8 +55,8 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.MatchingUpdatedAt).HasColumnName("matching_updated_at");
             e.Property(x => x.AssignedAt).HasColumnName("assigned_at");
-            e.Property<DateTimeOffset?>("StartedAt").HasColumnName("started_at");
-            e.Property<DateTimeOffset?>("CompletedAt").HasColumnName("completed_at");
+            e.Property(x => x.StartedAt).HasColumnName("started_at");
+            e.Property(x => x.CompletedAt).HasColumnName("completed_at");
             e.Property(x => x.CancelledAt).HasColumnName("cancelled_at");
             e.Property(x => x.CancellationReason).HasColumnName("cancellation_reason").HasColumnType("text");
             // RF-36, RN-SR8 (DD 5.5, v5.3): quién canceló; el CHECK lo agrega la migración CancelacionYAuditoria.
@@ -91,6 +94,22 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.HasIndex(x => x.ServiceRequestId, "ux_quotes_accepted").IsUnique().HasFilter("status = 'aceptada'");
             // Vencimiento (RN-Q6): el barrido busca las pendientes por fecha de vencimiento.
             e.HasIndex(x => x.ExpiresAt, "ix_quotes_pending_expires").HasFilter("status = 'pendiente'");
+        });
+
+        // Evidencias (DD 5.10, RF-15). RLS y los permisos los agrega la migración Evidencias; file_url es la clave del objeto
+        // en Garage (RN-E3).
+        modelBuilder.Entity<ServiceEvidence>(e =>
+        {
+            e.ToTable("service_evidence");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            e.Property(x => x.TenantId).HasColumnName("tenant_id");
+            e.Property(x => x.ServiceRequestId).HasColumnName("service_request_id");
+            e.Property(x => x.TechnicianId).HasColumnName("technician_id");
+            e.Property(x => x.FileUrl).HasColumnName("file_url").HasMaxLength(500);
+            e.Property(x => x.UploadedAt).HasColumnName("uploaded_at");
+            e.HasOne<DomainServiceRequest>().WithMany().HasForeignKey(x => x.ServiceRequestId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.ServiceRequestId, "ix_service_evidence_service_request");
         });
 
         modelBuilder.Entity<CategoryReplica>(e =>

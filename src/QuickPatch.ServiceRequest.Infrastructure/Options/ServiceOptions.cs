@@ -93,3 +93,30 @@ public sealed class RedisOptions
 
     public bool Enabled => !string.IsNullOrWhiteSpace(Endpoint);
 }
+
+/// <summary>
+/// Garage de la VM de mensajería y almacenamiento (ADR-016; Documento de Infraestructura 3.4): bucket
+/// <c>service-request-evidencias</c> con la llave <c>service-request</c>, que solo ve ese bucket. Sección <c>Evidence</c>; sin
+/// <see cref="Endpoint"/> (desarrollo local y pruebas unitarias) subir o descargar falla cerrado.
+/// </summary>
+public sealed class EvidenceStorageOptions
+{
+    public const string Section = "Evidence";
+
+    /// <summary>API S3 de Garage, por ejemplo <c>http://10.43.99.8:9000</c> en QA.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    public string Bucket { get; set; } = "service-request-evidencias";
+
+    /// <summary><c>s3_region</c> de Garage (<c>garage_region</c> en Ansible).</summary>
+    public string Region { get; set; } = "garage";
+
+    public string AccessKey { get; set; } = string.Empty;
+
+    public string SecretKey { get; set; } = string.Empty;
+
+    /// <summary>Espera máxima de cada operación con Garage.</summary>
+    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    public bool Enabled => !string.IsNullOrWhiteSpace(Endpoint);
+}

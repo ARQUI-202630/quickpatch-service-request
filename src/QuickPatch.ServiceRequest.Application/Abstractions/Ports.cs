@@ -1,4 +1,5 @@
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
@@ -27,6 +28,9 @@ public interface IServiceRequestRepository
     /// no existe.
     /// </summary>
     Task<DomainServiceRequest?> FindByIdAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Busca la solicitud en el tenant de la transacción, sin bloquearla (lecturas del <c>admin_tenant</c>).</summary>
+    Task<DomainServiceRequest?> FindInTenantAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>Busca la solicitud del cliente; devuelve null si no existe o es de otro cliente.</summary>
     Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken);
@@ -82,6 +86,39 @@ public interface IQuoteRepository
     /// </summary>
     Task<IReadOnlyList<Quote>> ListAsync(Guid serviceRequestId, CancellationToken cancellationToken);
 }
+
+/// <summary>Persistencia de evidencias (tabla <c>service_evidence</c>, DD 5.10), siempre bajo el tenant de la transacción.</summary>
+public interface IEvidenceRepository
+{
+    void Add(ServiceEvidence evidence);
+
+    /// <summary>
+    /// Cuántas evidencias tiene la solicitud. Completar la cuenta en la transacción que ya bloqueó la fila de la solicitud
+    /// (RN-SR3): así no se cruza con una subida.
+    /// </summary>
+    Task<int> CountAsync(Guid serviceRequestId, CancellationToken cancellationToken);
+
+    /// <summary>Evidencias de la solicitud, de la más antigua a la más reciente.</summary>
+    Task<IReadOnlyList<ServiceEvidence>> ListAsync(Guid serviceRequestId, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Almacenamiento de los archivos de evidencia: el bucket <c>service-request-evidencias</c> de Garage (RN-E3, ADR-016), con
+/// la llave <c>service-request</c>, que solo ve ese bucket.
+/// </summary>
+public interface IEvidenceStorage
+{
+    Task PutAsync(string key, ReadOnlyMemory<byte> content, string contentType, CancellationToken cancellationToken);
+
+    /// <summary>El archivo y su tipo; null si el objeto no existe.</summary>
+    Task<StoredEvidence?> GetAsync(string key, CancellationToken cancellationToken);
+
+    /// <summary>Borra el objeto; no falla si no existe.</summary>
+    Task DeleteAsync(string key, CancellationToken cancellationToken);
+}
+
+/// <summary>Archivo leído del almacenamiento. Quien lo recibe debe desechar <see cref="Content"/>.</summary>
+public sealed record StoredEvidence(Stream Content, string ContentType, long? Length);
 
 /// <summary>
 /// Cotizaciones pendientes ya vencidas de todos los tenants (RN-Q6). Usa el rol <c>service_request_scheduler</c> (P-06,

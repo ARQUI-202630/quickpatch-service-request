@@ -53,6 +53,41 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.ToTable("service_request_categories", (string)null);
                 });
 
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Evidence.ServiceEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("file_url");
+
+                    b.Property<Guid>("ServiceRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_request_id");
+
+                    b.Property<Guid>("TechnicianId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("technician_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("uploaded_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ix_service_evidence_service_request");
+
+                    b.ToTable("service_evidence", (string)null);
+                });
+
             modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Quotes.Quote", b =>
                 {
                     b.Property<Guid>("Id")
@@ -366,6 +401,15 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.HasKey("EventId");
 
                     b.ToTable("processed_events", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Evidence.ServiceEvidence", b =>
+                {
+                    b.HasOne("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Quotes.Quote", b =>
