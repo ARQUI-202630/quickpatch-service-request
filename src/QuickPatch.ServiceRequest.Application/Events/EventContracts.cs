@@ -51,6 +51,22 @@ public sealed record ServiceRequestCancelledData(
     string Reason,
     DateTimeOffset CancelledAt);
 
+/// <summary><c>data</c> de <c>service-request.quoted</c> v1 (RF-34, SCRUM-487). Los montos van como texto con dos decimales.</summary>
+public sealed record QuotedData(
+    Guid ServiceRequestId,
+    Guid QuoteId,
+    Guid ClientId,
+    Guid TechnicianId,
+    int QuoteNumber,
+    string TotalAmount,
+    DateTimeOffset ExpiresAt);
+
+/// <summary><c>data</c> de <c>service-request.quote-accepted</c> v1 (RF-35, SCRUM-487).</summary>
+public sealed record QuoteAcceptedData(Guid ServiceRequestId, Guid QuoteId, Guid TechnicianId, string TotalAmount);
+
+/// <summary><c>data</c> de <c>service-request.quote-rejected</c> v1 (RF-35, SCRUM-487). No lleva el motivo del rechazo.</summary>
+public sealed record QuoteRejectedData(Guid ServiceRequestId, Guid QuoteId, Guid TechnicianId, int RemainingQuotes);
+
 /// <summary><c>data</c> de <c>catalog.category-changed</c> v1.</summary>
 public sealed record CategoryChangedData(Guid CategoryId, string Name, bool Active, DateTimeOffset UpdatedAt);
 
@@ -68,6 +84,9 @@ public static class EventTypes
     public const string ServiceRequestCreated = "service-request.created";
     public const string ServiceRequestStatusChanged = "service-request.status-changed";
     public const string ServiceRequestCancelled = "service-request.cancelled";
+    public const string Quoted = "service-request.quoted";
+    public const string QuoteAccepted = "service-request.quote-accepted";
+    public const string QuoteRejected = "service-request.quote-rejected";
     public const string CategoryChanged = "catalog.category-changed";
     public const string TechnicianAssigned = "matching.technician-assigned";
     public const string NoTechnicianAvailable = "matching.no-technician-available";

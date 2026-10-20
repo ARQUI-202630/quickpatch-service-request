@@ -28,7 +28,7 @@ public class CancelServiceRequestTests
     }
 
     private Task<CancelServiceRequestResult> Cancel(Guid id, Guid? user = null, bool admin = false, string? reason = "Ya no necesito el servicio.") =>
-        new CancelServiceRequestHandler(store, store, store, store, new FixedClock(Now))
+        new CancelServiceRequestHandler(store, store, store, store, store, new FixedClock(Now))
             .HandleAsync(new CancelServiceRequestCommand(tenant, user ?? client, admin, id, reason, Guid.NewGuid()), CancellationToken.None);
 
     [Theory]

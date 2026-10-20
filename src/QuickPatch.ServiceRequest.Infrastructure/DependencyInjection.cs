@@ -6,17 +6,21 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 using QuickPatch.ServiceRequest.Application.Abstractions;
+using QuickPatch.ServiceRequest.Application.Quotes;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 using QuickPatch.ServiceRequest.Infrastructure.Geocoding;
 using QuickPatch.ServiceRequest.Infrastructure.Identity;
 using QuickPatch.ServiceRequest.Infrastructure.Messaging;
 using QuickPatch.ServiceRequest.Infrastructure.Options;
 using QuickPatch.ServiceRequest.Infrastructure.Persistence;
+using QuickPatch.ServiceRequest.Infrastructure.Scheduling;
+
+using StackExchange.Redis;
 
 namespace QuickPatch.ServiceRequest.Infrastructure;
 
 /// <summary>
-/// Capa de infraestructura: PostgreSQL + PostGIS (EF Core), Kafka y adaptadores externos (SDD 6.3).
+/// Capa de infraestructura: PostgreSQL + PostGIS (EF Core), Kafka, Redis y adaptadores externos (SDD 6.3).
 /// Implementa las interfaces que definen Application y Domain.
 /// </summary>
 public static class DependencyInjection
@@ -33,6 +37,8 @@ public static class DependencyInjection
         services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.Section));
         services.Configure<OutboxOptions>(configuration.GetSection(OutboxOptions.Section));
         services.Configure<PlatformOptions>(configuration.GetSection(PlatformOptions.Section));
+        services.Configure<QuotesOptions>(configuration.GetSection(QuotesOptions.Section));
+        services.AddSingleton(sp => new QuoteSettings(sp.GetRequiredService<IOptions<QuotesOptions>>().Value.Ttl));
 
         // Consulta interna por lote a Identity (identity-internal.v1.yaml, DD V4 8.3.4).
         var identity = configuration.GetSection(IdentityOptions.Section).Get<IdentityOptions>() ?? new IdentityOptions();
@@ -79,6 +85,34 @@ public static class DependencyInjection
         services.AddScoped<IOutbox, EfOutbox>();
         services.AddScoped<IAuditLog, EfAuditLog>();
         services.AddScoped<IPlatformServiceRequestCounter, PlatformServiceRequestCounter>();
+        services.AddScoped<IQuoteRepository, QuoteRepository>();
+        services.AddScoped<IExpiredQuoteFinder, ExpiredQuoteFinder>();
+
+        // Coordinación del vencimiento de cotizaciones en Redis (RN-Q6, DD 7.13), con el usuario ACL del servicio.
+        var redis = configuration.GetSection(RedisOptions.Section).Get<RedisOptions>() ?? new RedisOptions();
+        if (redis.Enabled)
+        {
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
+            {
+                var config = new ConfigurationOptions
+                {
+                    User = string.IsNullOrWhiteSpace(redis.User) ? null : redis.User,
+                    Password = string.IsNullOrWhiteSpace(redis.Password) ? null : redis.Password,
+                    AbortOnConnectFail = false,
+                    ClientName = "service-request",
+                };
+                config.EndPoints.Add(redis.Endpoint);
+                return ConnectionMultiplexer.Connect(config);
+            });
+            services.AddSingleton<IDistributedLock, RedisDistributedLock>();
+        }
+        else
+        {
+            services.AddSingleton<IDistributedLock, InProcessLock>();
+        }
+
+        services.AddSingleton<QuoteExpirer>();
+        services.AddHostedService(sp => sp.GetRequiredService<QuoteExpirer>());
 
         services.AddHealthChecks().AddDbContextCheck<ServiceRequestDbContext>("postgresql", tags: [ReadyTag]);
 

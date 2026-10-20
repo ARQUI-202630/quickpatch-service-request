@@ -30,11 +30,13 @@ public abstract record CancelServiceRequestResult
 /// Cancela la solicitud antes de iniciar el servicio (RF-36, RN-SR7, RN-SR8; DD 8.3.9). En una sola transacción bajo el
 /// tenant del token: bloquea la fila, aplica la cancelación, deja en el Outbox <c>service-request.cancelled</c> (Matching
 /// retira la oferta y libera al técnico, RN-M5 y RN-M6) y <c>service-request.status-changed</c> (aviso en tiempo real),
-/// y, si cancela un <c>admin_tenant</c>, escribe <c>cancelar_solicitud_admin</c> en <c>audit_logs</c>.
+/// y, si cancela un <c>admin_tenant</c>, escribe <c>cancelar_solicitud_admin</c> en <c>audit_logs</c>. Una cotización pendiente
+/// queda <c>anulada</c> (RN-Q5).
 /// </summary>
 public sealed class CancelServiceRequestHandler(
     ITenantUnitOfWork unitOfWork,
     IServiceRequestRepository serviceRequests,
+    IQuoteRepository quotes,
     IOutbox outbox,
     IAuditLog auditLog,
     TimeProvider clock)
@@ -66,8 +68,13 @@ public sealed class CancelServiceRequestHandler(
                     return new CancelServiceRequestResult.InvalidTransition(request.Status);
                 }
 
-                outbox.Enqueue(BuildCancelledEvent(request, command.CorrelationId, now));
-                outbox.Enqueue(BuildStatusChangedEvent(request, previousStatus, command.CorrelationId, now));
+                foreach (var quote in await quotes.ListAsync(request.Id, ct))
+                {
+                    quote.TryAnnul();
+                }
+
+                outbox.Enqueue(ServiceRequestEvents.Cancelled(request, command.CorrelationId, now));
+                outbox.Enqueue(ServiceRequestEvents.StatusChanged(request, previousStatus, command.CorrelationId, now));
                 if (command.IsTenantAdmin)
                 {
                     auditLog.Add(new AuditEntry(
@@ -83,38 +90,5 @@ public sealed class CancelServiceRequestHandler(
                 return new CancelServiceRequestResult.Cancelled(request);
             },
             cancellationToken);
-    }
-
-    private static OutboxMessage BuildCancelledEvent(DomainServiceRequest request, Guid correlationId, DateTimeOffset now)
-    {
-        var eventId = Guid.CreateVersion7(now);
-        var envelope = new EventEnvelope<ServiceRequestCancelledData>(
-            eventId,
-            EventTypes.ServiceRequestCancelled,
-            1,
-            now,
-            correlationId,
-            request.TenantId,
-            EventTypes.Producer,
-            new ServiceRequestCancelledData(
-                request.Id, request.ClientId, request.TechnicianId, request.CancelledByType!, request.CancellationReason!, now));
-        return new OutboxMessage(eventId, request.TenantId, request.Id, EventTypes.ServiceRequestCancelled, EventSerializer.Serialize(envelope));
-    }
-
-    private static OutboxMessage BuildStatusChangedEvent(
-        DomainServiceRequest request, string previousStatus, Guid correlationId, DateTimeOffset now)
-    {
-        var eventId = Guid.CreateVersion7(now);
-        var envelope = new EventEnvelope<ServiceRequestStatusChangedData>(
-            eventId,
-            EventTypes.ServiceRequestStatusChanged,
-            1,
-            now,
-            correlationId,
-            request.TenantId,
-            EventTypes.Producer,
-            new ServiceRequestStatusChangedData(request.Id, request.ClientId, request.TechnicianId, previousStatus, request.Status, now));
-        return new OutboxMessage(
-            eventId, request.TenantId, request.Id, EventTypes.ServiceRequestStatusChanged, EventSerializer.Serialize(envelope));
     }
 }

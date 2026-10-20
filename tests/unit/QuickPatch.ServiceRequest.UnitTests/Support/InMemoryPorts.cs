@@ -1,5 +1,6 @@
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
@@ -9,11 +10,12 @@ namespace QuickPatch.ServiceRequest.UnitTests.Support;
 /// <summary>
 /// Implementación en memoria de los puertos. Emula RLS: cada lectura solo ve las filas del tenant de la
 /// transacción en curso, y fuera de una transacción no se ve nada (falla cerrado, como en el DD 10.2). El conteo de
-/// plataforma es la excepción, como el rol <c>service_request_platform</c>: ve todos los tenants, pero solo cuenta.
+/// plataforma es la excepción, como el rol <c>service_request_platform</c>: ve todos los tenants, pero solo cuenta; y la
+/// búsqueda de cotizaciones vencidas, como <c>service_request_scheduler</c>: ve todos los tenants, pero solo referencias.
 /// </summary>
 public sealed class InMemoryStore :
     ITenantUnitOfWork, IServiceRequestRepository, ICategoryReplicaRepository, IProcessedEventRepository, IOutbox,
-    IPlatformServiceRequestCounter, IAuditLog
+    IPlatformServiceRequestCounter, IAuditLog, IQuoteRepository, IExpiredQuoteFinder
 {
     public List<AuditEntry> Audit { get; } = [];
 
@@ -131,6 +133,37 @@ public sealed class InMemoryStore :
         ProcessedEvents.Add((eventId, tenantId, eventType));
 
     public void Enqueue(OutboxMessage message) => Outbox.Add(message);
+
+    public List<Quote> Quotes { get; } = [];
+
+    public void Add(Quote quote) => Quotes.Add(quote);
+
+    public Task<IReadOnlyList<Quote>> ListAsync(Guid serviceRequestId, CancellationToken cancellationToken)
+    {
+        lock (this)
+        {
+            IReadOnlyList<Quote> rows = Quotes
+                .Where(x => x.TenantId == currentTenant && x.ServiceRequestId == serviceRequestId)
+                .OrderBy(x => x.CreatedAt)
+                .ThenBy(x => x.Id)
+                .ToList();
+            return Task.FromResult(rows);
+        }
+    }
+
+    public Task<IReadOnlyList<ExpiredQuoteRef>> FindAsync(DateTimeOffset now, int limit, CancellationToken cancellationToken)
+    {
+        lock (this)
+        {
+            IReadOnlyList<ExpiredQuoteRef> rows = Quotes
+                .Where(x => x.Status == QuoteStatus.Pendiente && x.ExpiresAt <= now)
+                .OrderBy(x => x.ExpiresAt)
+                .Take(limit)
+                .Select(x => new ExpiredQuoteRef(x.Id, x.TenantId, x.ServiceRequestId))
+                .ToList();
+            return Task.FromResult(rows);
+        }
+    }
 }
 
 /// <summary>

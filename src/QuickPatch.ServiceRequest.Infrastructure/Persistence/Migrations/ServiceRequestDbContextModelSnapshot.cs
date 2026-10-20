@@ -53,6 +53,86 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.ToTable("service_request_categories", (string)null);
                 });
 
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Quotes.Quote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Detail")
+                        .HasColumnType("text")
+                        .HasColumnName("detail");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<decimal>("LaborAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("labor_amount");
+
+                    b.Property<decimal>("MaterialsAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("materials_amount");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("responded_at");
+
+                    b.Property<Guid>("ServiceRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_request_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TechnicianId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("technician_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<decimal>("TotalAmount")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total_amount")
+                        .HasComputedColumnSql("labor_amount + materials_amount", true);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ExpiresAt" }, "ix_quotes_pending_expires")
+                        .HasFilter("status = 'pendiente'");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ix_quotes_service_request");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ux_quotes_accepted")
+                        .IsUnique()
+                        .HasFilter("status = 'aceptada'");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ux_quotes_pending")
+                        .IsUnique()
+                        .HasFilter("status = 'pendiente'");
+
+                    b.ToTable("quotes", (string)null);
+                });
+
             modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -286,6 +366,15 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.HasKey("EventId");
 
                     b.ToTable("processed_events", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Quotes.Quote", b =>
+                {
+                    b.HasOne("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }
