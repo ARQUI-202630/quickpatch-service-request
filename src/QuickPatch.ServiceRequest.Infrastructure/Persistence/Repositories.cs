@@ -4,6 +4,7 @@ using NetTopologySuite.Geometries;
 
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
@@ -44,6 +45,9 @@ public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServ
     // FOR UPDATE: la fila queda bloqueada hasta el final de la transacción; RLS sigue filtrando por el tenant.
     public Task<DomainServiceRequest?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
         db.ServiceRequests.FromSql($"SELECT * FROM service_requests WHERE id = {id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
+
+    public Task<DomainServiceRequest?> FindInTenantAsync(Guid id, CancellationToken cancellationToken) =>
+        db.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
     public Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken) =>
         db.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ClientId == clientId, cancellationToken);
@@ -112,6 +116,22 @@ public sealed class QuoteRepository(ServiceRequestDbContext db) : IQuoteReposito
         await db.Quotes
             .Where(x => x.ServiceRequestId == serviceRequestId)
             .OrderBy(x => x.CreatedAt)
+            .ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+}
+
+/// <summary>Evidencias bajo RLS (DD 5.10). La fila solo se inserta: ni el técnico ni nadie la cambia después.</summary>
+public sealed class EvidenceRepository(ServiceRequestDbContext db) : IEvidenceRepository
+{
+    public void Add(ServiceEvidence evidence) => db.Evidence.Add(evidence);
+
+    public Task<int> CountAsync(Guid serviceRequestId, CancellationToken cancellationToken) =>
+        db.Evidence.CountAsync(x => x.ServiceRequestId == serviceRequestId, cancellationToken);
+
+    public async Task<IReadOnlyList<ServiceEvidence>> ListAsync(Guid serviceRequestId, CancellationToken cancellationToken) =>
+        await db.Evidence.AsNoTracking()
+            .Where(x => x.ServiceRequestId == serviceRequestId)
+            .OrderBy(x => x.UploadedAt)
             .ThenBy(x => x.Id)
             .ToListAsync(cancellationToken);
 }

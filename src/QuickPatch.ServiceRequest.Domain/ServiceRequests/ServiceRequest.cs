@@ -288,6 +288,42 @@ public sealed class ServiceRequest
     /// </summary>
     public bool TryReturnToAssigned() => TryMove(ServiceRequestStatus.Cotizado, ServiceRequestStatus.Asignado);
 
+    /// <summary>Inicio del servicio (RF-14); null antes de <c>en_progreso</c>.</summary>
+    public DateTimeOffset? StartedAt { get; private set; }
+
+    /// <summary>Fin del servicio (RF-15); null antes de <c>completado</c>.</summary>
+    public DateTimeOffset? CompletedAt { get; private set; }
+
+    /// <summary>
+    /// El técnico asignado inició el servicio: <c>cotizacion_aceptada</c> pasa a <c>en_progreso</c> (RN-SR6). False, sin
+    /// cambiar nada, desde otro estado.
+    /// </summary>
+    public bool TryStart(DateTimeOffset startedAt)
+    {
+        if (!TryMove(ServiceRequestStatus.CotizacionAceptada, ServiceRequestStatus.EnProgreso))
+        {
+            return false;
+        }
+
+        StartedAt = startedAt;
+        return true;
+    }
+
+    /// <summary>
+    /// El técnico asignado completó el servicio: <c>en_progreso</c> pasa a <c>completado</c>. La evidencia (RN-SR3, RN-E1) la
+    /// cuenta el caso de uso en la misma transacción, antes de llamar aquí. False, sin cambiar nada, desde otro estado.
+    /// </summary>
+    public bool TryComplete(DateTimeOffset completedAt)
+    {
+        if (!TryMove(ServiceRequestStatus.EnProgreso, ServiceRequestStatus.Completado))
+        {
+            return false;
+        }
+
+        CompletedAt = completedAt;
+        return true;
+    }
+
     private bool TryMove(string from, string to)
     {
         if (Status != from)

@@ -1,5 +1,6 @@
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
@@ -15,7 +16,7 @@ namespace QuickPatch.ServiceRequest.UnitTests.Support;
 /// </summary>
 public sealed class InMemoryStore :
     ITenantUnitOfWork, IServiceRequestRepository, ICategoryReplicaRepository, IProcessedEventRepository, IOutbox,
-    IPlatformServiceRequestCounter, IAuditLog, IQuoteRepository, IExpiredQuoteFinder
+    IPlatformServiceRequestCounter, IAuditLog, IQuoteRepository, IExpiredQuoteFinder, IEvidenceRepository
 {
     public List<AuditEntry> Audit { get; } = [];
 
@@ -50,6 +51,9 @@ public sealed class InMemoryStore :
     public void Add(DomainServiceRequest serviceRequest) => ServiceRequests.Add(serviceRequest);
 
     public Task<DomainServiceRequest?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(ServiceRequests.SingleOrDefault(x => x.TenantId == currentTenant && x.Id == id));
+
+    public Task<DomainServiceRequest?> FindInTenantAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(ServiceRequests.SingleOrDefault(x => x.TenantId == currentTenant && x.Id == id));
 
     public Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken) =>
@@ -151,6 +155,37 @@ public sealed class InMemoryStore :
         }
     }
 
+    public List<ServiceEvidence> Evidence { get; } = [];
+
+    public void Add(ServiceEvidence evidence)
+    {
+        lock (this)
+        {
+            Evidence.Add(evidence);
+        }
+    }
+
+    public Task<int> CountAsync(Guid serviceRequestId, CancellationToken cancellationToken)
+    {
+        lock (this)
+        {
+            return Task.FromResult(Evidence.Count(x => x.TenantId == currentTenant && x.ServiceRequestId == serviceRequestId));
+        }
+    }
+
+    Task<IReadOnlyList<ServiceEvidence>> IEvidenceRepository.ListAsync(Guid serviceRequestId, CancellationToken cancellationToken)
+    {
+        lock (this)
+        {
+            IReadOnlyList<ServiceEvidence> rows = Evidence
+                .Where(x => x.TenantId == currentTenant && x.ServiceRequestId == serviceRequestId)
+                .OrderBy(x => x.UploadedAt)
+                .ThenBy(x => x.Id)
+                .ToList();
+            return Task.FromResult(rows);
+        }
+    }
+
     public Task<IReadOnlyList<ExpiredQuoteRef>> FindAsync(DateTimeOffset now, int limit, CancellationToken cancellationToken)
     {
         lock (this)
@@ -209,6 +244,58 @@ public sealed class FakeLocalityCatalog : ILocalityCatalog
     public Locality? Result { get; set; } = new("02", "Chapinero");
 
     public Task<Locality?> FindContainingAsync(GeoPoint point, CancellationToken cancellationToken) => Task.FromResult(Result);
+}
+
+/// <summary>
+/// Almacenamiento de evidencias en memoria (en lugar de Garage). Con <see cref="FailPut"/> simula que Garage no responde.
+/// </summary>
+public sealed class InMemoryEvidenceStorage : IEvidenceStorage
+{
+    public Dictionary<string, (byte[] Content, string ContentType)> Objects { get; } = [];
+
+    public List<string> Deleted { get; } = [];
+
+    public bool FailPut { get; set; }
+
+    /// <summary>Se ejecuta después de guardar el objeto, para simular algo que pasa entre la subida y la fila.</summary>
+    public Action? AfterPut { get; set; }
+
+    public Task PutAsync(string key, ReadOnlyMemory<byte> content, string contentType, CancellationToken cancellationToken)
+    {
+        if (FailPut)
+        {
+            throw new IOException("Garage no responde.");
+        }
+
+        lock (Objects)
+        {
+            Objects[key] = (content.ToArray(), contentType);
+        }
+
+        AfterPut?.Invoke();
+        return Task.CompletedTask;
+    }
+
+    public Task<StoredEvidence?> GetAsync(string key, CancellationToken cancellationToken)
+    {
+        lock (Objects)
+        {
+            return Task.FromResult(Objects.TryGetValue(key, out var o)
+                ? new StoredEvidence(new MemoryStream(o.Content), o.ContentType, o.Content.Length)
+                : null);
+        }
+    }
+
+    public Task DeleteAsync(string key, CancellationToken cancellationToken)
+    {
+        lock (Objects)
+        {
+            Objects.Remove(key);
+            Deleted.Add(key);
+        }
+
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Reloj fijo para pruebas deterministas.</summary>

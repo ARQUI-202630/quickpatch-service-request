@@ -27,6 +27,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     public FakeLocalityCatalog Localities { get; } = new();
 
+    public InMemoryEvidenceStorage EvidenceStorage { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
@@ -43,6 +45,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IAuditLog>(Store);
             services.AddSingleton<IQuoteRepository>(Store);
             services.AddSingleton<IExpiredQuoteFinder>(Store);
+            services.AddSingleton<IEvidenceRepository>(Store);
+            services.AddSingleton<IEvidenceStorage>(EvidenceStorage);
             services.AddSingleton<IUserDirectory>(Directory);
             services.AddSingleton<IGeocoder>(Geocoder);
             services.AddSingleton<ILocalityCatalog>(Localities);

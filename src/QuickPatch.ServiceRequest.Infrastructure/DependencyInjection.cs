@@ -1,3 +1,5 @@
+using Amazon.S3;
+
 using Confluent.Kafka;
 
 using Microsoft.EntityFrameworkCore;
@@ -14,13 +16,14 @@ using QuickPatch.ServiceRequest.Infrastructure.Messaging;
 using QuickPatch.ServiceRequest.Infrastructure.Options;
 using QuickPatch.ServiceRequest.Infrastructure.Persistence;
 using QuickPatch.ServiceRequest.Infrastructure.Scheduling;
+using QuickPatch.ServiceRequest.Infrastructure.Storage;
 
 using StackExchange.Redis;
 
 namespace QuickPatch.ServiceRequest.Infrastructure;
 
 /// <summary>
-/// Capa de infraestructura: PostgreSQL + PostGIS (EF Core), Kafka, Redis y adaptadores externos (SDD 6.3).
+/// Capa de infraestructura: PostgreSQL + PostGIS (EF Core), Kafka, Redis, Garage y adaptadores externos (SDD 6.3).
 /// Implementa las interfaces que definen Application y Domain.
 /// </summary>
 public static class DependencyInjection
@@ -87,6 +90,20 @@ public static class DependencyInjection
         services.AddScoped<IPlatformServiceRequestCounter, PlatformServiceRequestCounter>();
         services.AddScoped<IQuoteRepository, QuoteRepository>();
         services.AddScoped<IExpiredQuoteFinder, ExpiredQuoteFinder>();
+        services.AddScoped<IEvidenceRepository, EvidenceRepository>();
+
+        // Fotos de evidencia en Garage (RN-E3, ADR-016).
+        var evidence = configuration.GetSection(EvidenceStorageOptions.Section).Get<EvidenceStorageOptions>() ?? new EvidenceStorageOptions();
+        if (evidence.Enabled)
+        {
+            services.AddSingleton(evidence);
+            services.AddSingleton<IAmazonS3>(_ => GarageEvidenceStorage.CreateClient(evidence));
+            services.AddSingleton<IEvidenceStorage, GarageEvidenceStorage>();
+        }
+        else
+        {
+            services.AddSingleton<IEvidenceStorage, UnconfiguredEvidenceStorage>();
+        }
 
         // Coordinación del vencimiento de cotizaciones en Redis (RN-Q6, DD 7.13), con el usuario ACL del servicio.
         var redis = configuration.GetSection(RedisOptions.Section).Get<RedisOptions>() ?? new RedisOptions();

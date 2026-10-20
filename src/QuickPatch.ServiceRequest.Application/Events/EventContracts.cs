@@ -67,6 +67,22 @@ public sealed record QuoteAcceptedData(Guid ServiceRequestId, Guid QuoteId, Guid
 /// <summary><c>data</c> de <c>service-request.quote-rejected</c> v1 (RF-35, SCRUM-487). No lleva el motivo del rechazo.</summary>
 public sealed record QuoteRejectedData(Guid ServiceRequestId, Guid QuoteId, Guid TechnicianId, int RemainingQuotes);
 
+/// <summary><c>data</c> de <c>service-request.started</c> v1 (RF-14, SCRUM-94).</summary>
+public sealed record ServiceStartedData(Guid ServiceRequestId, Guid ClientId, Guid TechnicianId, DateTimeOffset StartedAt);
+
+/// <summary>
+/// <c>data</c> de <c>service-request.completed</c> v1 (RF-15, SCRUM-94): el total de la cotización aceptada es el monto del
+/// pago (RN-P4). <see cref="CompanyId"/> es nulo mientras no exista la solicitud de empresa (RF-08).
+/// </summary>
+public sealed record ServiceCompletedData(
+    Guid ServiceRequestId,
+    Guid ClientId,
+    Guid? CompanyId,
+    Guid TechnicianId,
+    Guid QuoteId,
+    string TotalAmount,
+    DateTimeOffset CompletedAt);
+
 /// <summary><c>data</c> de <c>catalog.category-changed</c> v1.</summary>
 public sealed record CategoryChangedData(Guid CategoryId, string Name, bool Active, DateTimeOffset UpdatedAt);
 
@@ -87,6 +103,8 @@ public static class EventTypes
     public const string Quoted = "service-request.quoted";
     public const string QuoteAccepted = "service-request.quote-accepted";
     public const string QuoteRejected = "service-request.quote-rejected";
+    public const string ServiceStarted = "service-request.started";
+    public const string ServiceCompleted = "service-request.completed";
     public const string CategoryChanged = "catalog.category-changed";
     public const string TechnicianAssigned = "matching.technician-assigned";
     public const string NoTechnicianAvailable = "matching.no-technician-available";
