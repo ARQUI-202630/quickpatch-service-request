@@ -83,8 +83,8 @@ public sealed record ServiceCompletedData(
     string TotalAmount,
     DateTimeOffset CompletedAt);
 
-/// <summary><c>data</c> de <c>catalog.category-changed</c> v1.</summary>
-public sealed record CategoryChangedData(Guid CategoryId, string Name, bool Active, DateTimeOffset UpdatedAt);
+/// <summary><c>data</c> de <c>catalog.category-changed</c> v1; <see cref="Description"/> es opcional desde quickpatch-kafka v0.8.0.</summary>
+public sealed record CategoryChangedData(Guid CategoryId, string Name, bool Active, DateTimeOffset UpdatedAt, string? Description = null);
 
 /// <summary><c>data</c> de <c>matching.technician-assigned</c> v1.</summary>
 public sealed record TechnicianAssignedData(Guid ServiceRequestId, Guid ClientId, Guid AttemptId, Guid TechnicianId, DateTimeOffset AssignedAt);

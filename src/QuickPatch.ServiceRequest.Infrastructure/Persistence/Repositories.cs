@@ -145,6 +145,13 @@ public sealed class CategoryReplicaRepository(ServiceRequestDbContext db) : ICat
         db.Categories.SingleOrDefaultAsync(x => x.CategoryId == categoryId, cancellationToken);
 
     public void Add(CategoryReplica category) => db.Categories.Add(category);
+
+    public async Task<IReadOnlyList<CategoryReplica>> ListActiveAsync(CancellationToken cancellationToken) =>
+        await db.Categories.AsNoTracking()
+            .Where(x => x.Active)
+            .OrderBy(x => x.Name)
+            .ThenBy(x => x.CategoryId)
+            .ToListAsync(cancellationToken);
 }
 
 public sealed class ProcessedEventRepository(ServiceRequestDbContext db) : IProcessedEventRepository
@@ -194,6 +201,12 @@ public sealed class LocalityCatalog(ServiceRequestDbContext db) : ILocalityCatal
             .FirstOrDefaultAsync(cancellationToken);
         return row is null ? null : new Locality(row.Code, row.Name);
     }
+
+    public async Task<IReadOnlyList<Locality>> ListAsync(CancellationToken cancellationToken) =>
+        await db.Localities.AsNoTracking()
+            .OrderBy(l => l.Code)
+            .Select(l => new Locality(l.Code, l.Name))
+            .ToListAsync(cancellationToken);
 }
 
 public sealed class EfAuditLog(ServiceRequestDbContext db) : IAuditLog

@@ -130,6 +130,18 @@ public sealed class InMemoryStore :
 
     public void Add(CategoryReplica category) => Categories.Add(category);
 
+    public Task<IReadOnlyList<CategoryReplica>> ListActiveAsync(CancellationToken cancellationToken)
+    {
+        lock (this)
+        {
+            IReadOnlyList<CategoryReplica> rows = Categories
+                .Where(x => x.TenantId == currentTenant && x.Active)
+                .OrderBy(x => x.Name, StringComparer.Ordinal)
+                .ToList();
+            return Task.FromResult(rows);
+        }
+    }
+
     public Task<bool> ExistsAsync(Guid eventId, CancellationToken cancellationToken) =>
         Task.FromResult(ProcessedEvents.Any(x => x.TenantId == currentTenant && x.EventId == eventId));
 
@@ -244,6 +256,11 @@ public sealed class FakeLocalityCatalog : ILocalityCatalog
     public Locality? Result { get; set; } = new("02", "Chapinero");
 
     public Task<Locality?> FindContainingAsync(GeoPoint point, CancellationToken cancellationToken) => Task.FromResult(Result);
+
+    public List<Locality> All { get; } = [new("01", "Usaquén"), new("02", "Chapinero")];
+
+    public Task<IReadOnlyList<Locality>> ListAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Locality>>(All);
 }
 
 /// <summary>

@@ -17,7 +17,8 @@ using QuickPatch.ServiceRequest.UnitTests.Support;
 namespace QuickPatch.ServiceRequest.UnitTests.Api;
 
 /// <summary>API completa con los puertos en memoria: autenticación, validación, reglas y contrato HTTP.</summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>
+/// <summary>API con los puertos en memoria. Las subclases agregan configuración con <see cref="Configure"/>.</summary>
+public class ApiFactoryBase : WebApplicationFactory<Program>
 {
     public InMemoryStore Store { get; } = new();
 
@@ -29,8 +30,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     public InMemoryEvidenceStorage EvidenceStorage { get; } = new();
 
+    protected virtual void Configure(IWebHostBuilder builder)
+    {
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        Configure(builder);
         builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
         builder.UseSetting("ConnectionStrings:ServiceRequest", "Host=sin-base-en-pruebas-unitarias");
         builder.ConfigureTestServices(services =>
@@ -54,6 +60,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         });
     }
 }
+
+public sealed class ApiFactory : ApiFactoryBase;
 
 public class ServiceRequestApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {

@@ -119,6 +119,7 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property(x => x.CategoryId).HasColumnName("category_id").ValueGeneratedNever();
             e.Property(x => x.TenantId).HasColumnName("tenant_id");
             e.Property(x => x.Name).HasColumnName("name").HasMaxLength(100);
+            e.Property(x => x.Description).HasColumnName("description").HasMaxLength(255);
             e.Property(x => x.Active).HasColumnName("active");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });

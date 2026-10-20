@@ -148,6 +148,9 @@ public interface ICategoryReplicaRepository
 
     Task<CategoryReplica?> FindAsync(Guid categoryId, CancellationToken cancellationToken);
 
+    /// <summary>Categorías activas del tenant de la transacción, ordenadas por nombre (contrato 1.8.0, ADR-025).</summary>
+    Task<IReadOnlyList<CategoryReplica>> ListActiveAsync(CancellationToken cancellationToken);
+
     void Add(CategoryReplica category);
 }
 
@@ -216,4 +219,7 @@ public interface ILocalityCatalog
 {
     /// <summary>Localidad que contiene el punto; null si el punto no cae en ninguna de las 20.</summary>
     Task<Locality?> FindContainingAsync(GeoPoint point, CancellationToken cancellationToken);
+
+    /// <summary>Las 20 localidades, ordenadas por código (contrato 1.8.0, ADR-025).</summary>
+    Task<IReadOnlyList<Locality>> ListAsync(CancellationToken cancellationToken);
 }

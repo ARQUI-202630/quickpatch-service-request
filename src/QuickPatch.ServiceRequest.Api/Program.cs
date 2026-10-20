@@ -22,6 +22,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 builder.Services.AddHealthChecks();
 builder.Services.AddQuickPatchAuthentication(builder.Configuration);
+builder.Services.Configure<ChannelOptions>(builder.Configuration.GetSection(ChannelOptions.Section));
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -44,6 +45,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 app.MapServiceRequestEndpoints();
 app.MapQuoteEndpoints();
 app.MapExecutionEndpoints();
+app.MapReferenceEndpoints();
 app.MapAdminServiceRequestEndpoints();
 
 app.Run();
