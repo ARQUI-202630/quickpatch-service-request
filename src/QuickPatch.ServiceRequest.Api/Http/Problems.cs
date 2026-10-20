@@ -10,6 +10,7 @@ public static class Problems
     public const string OutOfCoverage = Base + "ubicacion-fuera-de-cobertura";
     public const string AddressNotFound = Base + "direccion-no-encontrada";
     public const string InvalidTransition = Base + "transicion-invalida";
+    public const string QuoteLimitReached = Base + "limite-de-cotizaciones";
     public const string NotFound = Base + "no-encontrado";
     public const string Unauthorized = Base + "no-autenticado";
     public const string Forbidden = Base + "no-autorizado";

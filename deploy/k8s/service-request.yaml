@@ -26,6 +26,13 @@ data:
   # Geocodificación propia (ADR-024, RIE-02): Nominatim corre en la VM de datos de cada ambiente (playbook deploy-nominatim.yml
   # de quickpatch). El playbook reemplaza <vm-datos>. Si no responde, la solicitud con addressText da 422 direccion-no-encontrada.
   Geocoding__NominatimUrl: "http://<vm-datos>:8088"
+  # Cotizaciones (RF-34, RF-35, SCRUM-488): plazo para responder (RN-Q8, DEP-16) y rol de db/roles.sql con el que el proceso
+  # programado encuentra las vencidas de todos los tenants (P-06, RN-Q6).
+  Quotes__Ttl: "1.00:00:00"
+  Quotes__SchedulerRole: "service_request_scheduler"
+  # Redis de la VM de datos (coordinación del vencimiento, DD 7.13): usuario ACL service-request, solo claves service-request:*.
+  Redis__Endpoint: "<vm-datos>:6379"
+  Redis__User: "service-request"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -73,6 +80,8 @@ spec:
               valueFrom: { secretKeyRef: { name: service-request-secretos, key: app-connection } }
             - name: Jwt__PublicKeyPem
               valueFrom: { secretKeyRef: { name: service-request-secretos, key: jwt-public-key } }
+            - name: Redis__Password
+              valueFrom: { secretKeyRef: { name: service-request-secretos, key: redis-password } }
           readinessProbe:
             httpGet: { path: /health/ready, port: http }
             periodSeconds: 10

@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using QuickPatch.ServiceRequest.Application.Categories;
 using QuickPatch.ServiceRequest.Application.Matching;
+using QuickPatch.ServiceRequest.Application.Quotes;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
 
 namespace QuickPatch.ServiceRequest.Application;
@@ -22,6 +23,11 @@ public static class DependencyInjection
         services.AddScoped<ListTechnicianServiceRequestsHandler>();
         services.AddScoped<ListTenantServiceRequestsHandler>();
         services.AddScoped<CancelServiceRequestHandler>();
+        services.AddScoped<IssueQuoteHandler>();
+        services.AddScoped<ListQuotesHandler>();
+        services.AddScoped<RespondQuoteHandler>();
+        services.AddScoped<ExpireQuoteHandler>();
+        services.AddScoped<ExpireQuotesBatch>();
         services.AddScoped<GetTenantSummaryHandler>();
         services.AddScoped<GetPlatformSummaryHandler>();
         services.AddScoped<ApplyCategoryChangedHandler>();

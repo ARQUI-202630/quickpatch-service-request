@@ -1,4 +1,5 @@
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
@@ -67,6 +68,40 @@ public interface IPlatformServiceRequestCounter
     /// <param name="tenantId">Solo ese tenant; null para todos.</param>
     Task<IReadOnlyList<TenantStatusCountRow>> CountByTenantAsync(
         Guid? tenantId, DateTimeOffset createdSince, CancellationToken cancellationToken);
+}
+
+/// <summary>Persistencia de cotizaciones (tabla <c>quotes</c>, DD 5.11), siempre bajo el tenant de la transacción.</summary>
+public interface IQuoteRepository
+{
+    void Add(Quote quote);
+
+    /// <summary>
+    /// Cotizaciones de la solicitud, de la más antigua a la más reciente. Las que se vayan a modificar se leen dentro de la
+    /// transacción que ya bloqueó la fila de la solicitud (<see cref="IServiceRequestRepository.FindByIdAsync"/>): ese
+    /// bloqueo serializa emitir, responder, vencer y cancelar (RN-Q7).
+    /// </summary>
+    Task<IReadOnlyList<Quote>> ListAsync(Guid serviceRequestId, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Cotizaciones pendientes ya vencidas de todos los tenants (RN-Q6). Usa el rol <c>service_request_scheduler</c> (P-06,
+/// DD 10.2), que solo lee identificadores, tenant, estado y vencimiento; cada cotización se vence después en su tenant.
+/// </summary>
+public interface IExpiredQuoteFinder
+{
+    Task<IReadOnlyList<ExpiredQuoteRef>> FindAsync(DateTimeOffset now, int limit, CancellationToken cancellationToken);
+}
+
+public sealed record ExpiredQuoteRef(Guid QuoteId, Guid TenantId, Guid ServiceRequestId);
+
+/// <summary>
+/// Candado distribuido para las tareas programadas (coordinación temporal en Redis, DD 7.13 para RN-Q6 y SAD 5.1): con
+/// varias réplicas, solo una recorre las cotizaciones vencidas en cada vuelta.
+/// </summary>
+public interface IDistributedLock
+{
+    /// <summary>Toma el candado por <paramref name="ttl"/>; null si lo tiene otra réplica. Se suelta al desecharlo.</summary>
+    Task<IAsyncDisposable?> TryAcquireAsync(string name, TimeSpan ttl, CancellationToken cancellationToken);
 }
 
 /// <summary>Réplica local de categorías (tabla <c>service_request_categories</c>).</summary>

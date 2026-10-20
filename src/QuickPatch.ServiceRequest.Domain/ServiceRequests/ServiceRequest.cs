@@ -276,6 +276,29 @@ public sealed class ServiceRequest
         return true;
     }
 
+    /// <summary>El técnico asignado emitió una cotización: <c>asignado</c> pasa a <c>cotizado</c> (RN-Q1). False si no está en <c>asignado</c>.</summary>
+    public bool TryMarkQuoted() => TryMove(ServiceRequestStatus.Asignado, ServiceRequestStatus.Cotizado);
+
+    /// <summary>El cliente aceptó la cotización: <c>cotizado</c> pasa a <c>cotizacion_aceptada</c> y el servicio puede iniciar (RN-SR6).</summary>
+    public bool TryAcceptQuote() => TryMove(ServiceRequestStatus.Cotizado, ServiceRequestStatus.CotizacionAceptada);
+
+    /// <summary>
+    /// El cliente rechazó una cotización y le quedan más: <c>cotizado</c> vuelve a <c>asignado</c> para que el técnico emita
+    /// otra (DD 7.4). Con la tercera, la solicitud se cancela con <see cref="TryCancel"/> (RN-Q7).
+    /// </summary>
+    public bool TryReturnToAssigned() => TryMove(ServiceRequestStatus.Cotizado, ServiceRequestStatus.Asignado);
+
+    private bool TryMove(string from, string to)
+    {
+        if (Status != from)
+        {
+            return false;
+        }
+
+        Status = to;
+        return true;
+    }
+
     /// <summary>Reconstruye una solicitud persistida; lo usa el repositorio.</summary>
     public static ServiceRequest Restore(
         Guid id,

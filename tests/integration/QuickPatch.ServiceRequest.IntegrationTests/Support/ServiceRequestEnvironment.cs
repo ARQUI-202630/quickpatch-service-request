@@ -12,16 +12,20 @@ using QuickPatch.ServiceRequest.UnitTests.Support;
 
 using Testcontainers.Kafka;
 using Testcontainers.PostgreSql;
+using Testcontainers.Redis;
 
 namespace QuickPatch.ServiceRequest.IntegrationTests.Support;
 
 /// <summary>
-/// Ambiente real para las pruebas: PostgreSQL 16 + PostGIS y Kafka en contenedores, con las migraciones
-/// aplicadas, los roles del DD 10.2 y el servicio conectado con el rol <c>service_request_app</c> (sujeto a RLS).
+/// Ambiente real para las pruebas: PostgreSQL 16 + PostGIS, Kafka y Redis en contenedores, con las migraciones
+/// aplicadas, los roles del DD 10.2 y el servicio conectado con el rol <c>service_request_app</c> (sujeto a RLS). Redis tiene
+/// el mismo usuario ACL que en QA (<c>service-request</c>, solo claves <c>service-request:*</c> y sin comandos peligrosos).
 /// </summary>
 public sealed class ServiceRequestEnvironment : IAsyncLifetime
 {
     public const string AppPassword = "app-pruebas";
+    public const string RedisUser = "service-request";
+    public const string RedisPassword = "redis-pruebas";
 
     private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgis/postgis:16-3.5")
         .WithDatabase("db_service_request")
@@ -29,6 +33,11 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
 
     private readonly KafkaContainer kafka = new KafkaBuilder("confluentinc/cp-kafka:7.7.1")
         .Build();
+
+    private readonly RedisContainer redis = new RedisBuilder("redis:7.4-alpine")
+        .Build();
+
+    public string RedisEndpoint => $"{redis.Hostname}:{redis.GetMappedPublicPort(RedisBuilder.RedisPort)}";
 
     public string AdminConnectionString => postgres.GetConnectionString();
 
@@ -48,7 +57,15 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), kafka.StartAsync(), Identity.StartAsync(), Nominatim.StartAsync());
+        await Task.WhenAll(postgres.StartAsync(), kafka.StartAsync(), redis.StartAsync(), Identity.StartAsync(), Nominatim.StartAsync());
+
+        // Igual que templates/redis-users.acl.j2 de Ansible.
+        var acl = await redis.ExecAsync(["redis-cli", "ACL", "SETUSER", RedisUser, "on", $">{RedisPassword}",
+            "~service-request:*", "&service-request:*", "+@all", "-@dangerous"]);
+        if (acl.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"No se pudo crear el usuario de Redis: {acl.Stderr}");
+        }
 
         var options = new DbContextOptionsBuilder<ServiceRequestDbContext>()
             .UseNpgsql(AdminConnectionString, n => n.UseNetTopologySuite())
@@ -77,6 +94,11 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
             builder.UseSetting("Kafka:BootstrapServers", KafkaServers);
             builder.UseSetting("Outbox:PublisherRole", "service_request_outbox");
             builder.UseSetting("Platform:ReadRole", "service_request_platform");
+            builder.UseSetting("Quotes:SchedulerRole", "service_request_scheduler");
+            builder.UseSetting("Quotes:ExpiryInterval", "00:00:01");
+            builder.UseSetting("Redis:Endpoint", RedisEndpoint);
+            builder.UseSetting("Redis:User", RedisUser);
+            builder.UseSetting("Redis:Password", RedisPassword);
             builder.UseSetting("Outbox:PollInterval", "00:00:00.200");
             builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
             builder.UseSetting("Identity:BaseUrl", Identity.BaseUrl);
@@ -92,7 +114,8 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
             await App.DisposeAsync();
         }
 
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), kafka.DisposeAsync().AsTask(), Identity.DisposeAsync().AsTask(),
+        await Task.WhenAll(postgres.DisposeAsync().AsTask(), kafka.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask(),
+            Identity.DisposeAsync().AsTask(),
             Nominatim.DisposeAsync().AsTask());
     }
 

@@ -4,6 +4,7 @@ using NetTopologySuite.Geometries;
 
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Categories;
+using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
@@ -97,6 +98,22 @@ public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServ
             .ToListAsync(cancellationToken);
         return rows.Select(r => new StatusCountRow(r.Status, r.Total, r.CreatedSince)).ToList();
     }
+}
+
+/// <summary>
+/// Cotizaciones bajo RLS. Se leen con seguimiento: los casos de uso las modifican en la misma transacción que ya bloqueó la
+/// fila de la solicitud.
+/// </summary>
+public sealed class QuoteRepository(ServiceRequestDbContext db) : IQuoteRepository
+{
+    public void Add(Quote quote) => db.Quotes.Add(quote);
+
+    public async Task<IReadOnlyList<Quote>> ListAsync(Guid serviceRequestId, CancellationToken cancellationToken) =>
+        await db.Quotes
+            .Where(x => x.ServiceRequestId == serviceRequestId)
+            .OrderBy(x => x.CreatedAt)
+            .ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken);
 }
 
 public sealed class CategoryReplicaRepository(ServiceRequestDbContext db) : ICategoryReplicaRepository

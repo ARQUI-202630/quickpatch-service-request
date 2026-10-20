@@ -53,3 +53,43 @@ public sealed class PlatformOptions
     /// </summary>
     public string ReadRole { get; set; } = string.Empty;
 }
+
+/// <summary>Cotizaciones (RN-Q6, RN-Q8). Sección <c>Quotes</c>.</summary>
+public sealed class QuotesOptions
+{
+    public const string Section = "Quotes";
+
+    /// <summary><c>QUOTE_TTL</c> (RN-Q8, DEP-16): plazo del cliente para responder. QA puede usar uno corto.</summary>
+    public TimeSpan Ttl { get; set; } = TimeSpan.FromHours(24);
+
+    /// <summary>Cada cuánto se buscan cotizaciones vencidas.</summary>
+    public TimeSpan ExpiryInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Cotizaciones vencidas que se procesan por vuelta.</summary>
+    public int ExpiryBatchSize { get; set; } = 100;
+
+    /// <summary>
+    /// Rol <c>service_request_scheduler</c> (P-06, DD 10.2) que se adopta con <c>SET LOCAL ROLE</c> para encontrar las
+    /// cotizaciones vencidas de todos los tenants. Vacío solo en desarrollo local: sin el rol, RLS no deja ver ninguna.
+    /// </summary>
+    public string SchedulerRole { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Redis de la VM de datos (SAD 5.1, Documento de Infraestructura 3.4): usuario propio <c>service-request</c>, restringido a
+/// las claves <c>service-request:*</c>. Sección <c>Redis</c>; sin <see cref="Endpoint"/> (desarrollo local y pruebas
+/// unitarias) el candado es local al proceso.
+/// </summary>
+public sealed class RedisOptions
+{
+    public const string Section = "Redis";
+
+    /// <summary>Por ejemplo <c>10.43.98.29:6379</c>.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    public string User { get; set; } = string.Empty;
+
+    public string Password { get; set; } = string.Empty;
+
+    public bool Enabled => !string.IsNullOrWhiteSpace(Endpoint);
+}
