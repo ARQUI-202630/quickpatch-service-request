@@ -38,6 +38,11 @@ data:
   Evidence__Endpoint: "http://<vm-mensajeria>:9000"
   Evidence__Bucket: "service-request-evidencias"
   Evidence__Region: "garage"
+  # Lista de categorías sin token (registro de técnicos, contrato 1.8.0, ADR-025): el mismo mapa canal -> tenant de Identity
+  # y Catalog (RN-U5, DEP-09). Con el mapa definido, un canal que no esté aquí recibe 503.
+  Channel__TenantId: "00000000-0000-0000-0000-000000000001"
+  Channel__Tenants__quickpatch-mobile: "00000000-0000-0000-0000-000000000001"
+  Channel__Tenants__quickpatch-web: "00000000-0000-0000-0000-000000000001"
 ---
 apiVersion: apps/v1
 kind: Deployment

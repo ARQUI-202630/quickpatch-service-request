@@ -152,6 +152,17 @@ public class CategoryReplicaTests
     }
 
     [Fact]
+    public void ApplyChange_GuardaLaDescripcionDelEvento()
+    {
+        var category = new CategoryReplica(Guid.NewGuid(), Guid.NewGuid(), "Plomería", true, T0);
+
+        Assert.True(category.ApplyChange("Plomería", true, T0.AddMinutes(1), "Fugas y tuberías."));
+        Assert.Equal("Fugas y tuberías.", category.Description);
+        Assert.False(category.ApplyChange("Plomería", true, T0.AddMinutes(1), "Otra"));
+        Assert.Equal("Fugas y tuberías.", category.Description);
+    }
+
+    [Fact]
     public void ApplyChange_AtrasadoOIgual_SeDescarta()
     {
         var category = new CategoryReplica(Guid.NewGuid(), Guid.NewGuid(), "Plomería", true, T0);

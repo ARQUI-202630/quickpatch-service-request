@@ -4,6 +4,7 @@ using QuickPatch.ServiceRequest.Application.Categories;
 using QuickPatch.ServiceRequest.Application.Execution;
 using QuickPatch.ServiceRequest.Application.Matching;
 using QuickPatch.ServiceRequest.Application.Quotes;
+using QuickPatch.ServiceRequest.Application.References;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
 
 namespace QuickPatch.ServiceRequest.Application;
@@ -34,6 +35,8 @@ public static class DependencyInjection
         services.AddScoped<UploadEvidenceHandler>();
         services.AddScoped<ListEvidenceHandler>();
         services.AddScoped<DownloadEvidenceHandler>();
+        services.AddScoped<ListCategoriesHandler>();
+        services.AddScoped<ListLocalitiesHandler>();
         services.AddScoped<GetTenantSummaryHandler>();
         services.AddScoped<GetPlatformSummaryHandler>();
         services.AddScoped<ApplyCategoryChangedHandler>();
