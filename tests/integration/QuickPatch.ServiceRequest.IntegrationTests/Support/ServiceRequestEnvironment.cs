@@ -123,6 +123,8 @@ public sealed class ServiceRequestEnvironment : IAsyncLifetime
             new TopicSpecification { Name = "matching.technician-assigned", NumPartitions = 1, ReplicationFactor = 1 },
             new TopicSpecification { Name = "matching.no-technician-available", NumPartitions = 1, ReplicationFactor = 1 },
             new TopicSpecification { Name = "matching.search-resumed", NumPartitions = 1, ReplicationFactor = 1 },
+            new TopicSpecification { Name = "payment.approved", NumPartitions = 1, ReplicationFactor = 1 },
+            new TopicSpecification { Name = "payment.rejected", NumPartitions = 1, ReplicationFactor = 1 },
         ]);
 
         App = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
