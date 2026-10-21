@@ -52,6 +52,10 @@ public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServ
     public Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken) =>
         db.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ClientId == clientId, cancellationToken);
 
+    public Task<DomainServiceRequest?> FindForCompanyMemberAsync(Guid id, Guid userId, Guid companyId, CancellationToken cancellationToken) =>
+        db.ServiceRequests.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == id && (x.ClientId == userId || x.CompanyId == companyId), cancellationToken);
+
     public Task<DomainServiceRequest?> FindForTechnicianAsync(Guid id, Guid technicianId, CancellationToken cancellationToken) =>
         db.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.TechnicianId == technicianId, cancellationToken);
 
@@ -76,9 +80,18 @@ public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServ
     }
 
     public async Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTenantAsync(
-        string? status, int skip, int take, CancellationToken cancellationToken)
+        string? status, ListScope? scope, int skip, int take, CancellationToken cancellationToken)
     {
         var query = db.ServiceRequests.AsNoTracking();
+        if (scope is { CompanyId: { } companyId })
+        {
+            query = query.Where(x => x.ClientId == scope.ClientId || x.CompanyId == companyId);
+        }
+        else if (scope is not null)
+        {
+            query = query.Where(x => x.ClientId == scope.ClientId);
+        }
+
         if (status is not null)
         {
             query = query.Where(x => x.Status == status);

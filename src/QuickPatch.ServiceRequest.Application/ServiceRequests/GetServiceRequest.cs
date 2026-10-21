@@ -4,11 +4,15 @@ using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.Se
 
 namespace QuickPatch.ServiceRequest.Application.ServiceRequests;
 
-/// <summary>Quién consulta el detalle. Todo sale del JWT; <see cref="AccessToken"/> se reenvía a Identity tal cual.</summary>
-public sealed record ServiceRequestViewer(Guid UserId, Guid TenantId, string Role, string AccessToken, Guid CorrelationId)
+/// <summary>
+/// Quién consulta el detalle. Todo sale del JWT; <see cref="AccessToken"/> se reenvía a Identity tal cual y
+/// <see cref="CompanyId"/> es el claim <c>company_id</c> del <c>empresa_contacto</c>.
+/// </summary>
+public sealed record ServiceRequestViewer(Guid UserId, Guid TenantId, string Role, string AccessToken, Guid CorrelationId, Guid? CompanyId = null)
 {
     public const string ClientRole = "cliente";
     public const string TechnicianRole = "tecnico";
+    public const string CompanyContactRole = "empresa_contacto";
 }
 
 /// <summary>Bloque <c>technician</c> del contrato.</summary>
@@ -45,15 +49,17 @@ public sealed class GetServiceRequestHandler(
     {
         ArgumentNullException.ThrowIfNull(viewer);
         var isTechnician = viewer.Role == ServiceRequestViewer.TechnicianRole;
-        if (!isTechnician && viewer.Role != ServiceRequestViewer.ClientRole)
+        var isCompanyMember = viewer.Role == ServiceRequestViewer.CompanyContactRole && viewer.CompanyId is not null;
+        if (!isTechnician && !isCompanyMember && viewer.Role != ServiceRequestViewer.ClientRole)
         {
             return new GetServiceRequestResult.Forbidden();
         }
 
+        // El empresa_contacto ve las que creó y las de su empresa (RN-SR14); el cliente, solo las suyas.
         var serviceRequest = await unitOfWork.ExecuteAsync(
             viewer.TenantId,
-            ct => isTechnician
-                ? serviceRequests.FindForTechnicianAsync(id, viewer.UserId, ct)
+            ct => isTechnician ? serviceRequests.FindForTechnicianAsync(id, viewer.UserId, ct)
+                : isCompanyMember ? serviceRequests.FindForCompanyMemberAsync(id, viewer.UserId, viewer.CompanyId!.Value, ct)
                 : serviceRequests.FindForClientAsync(id, viewer.UserId, ct),
             cancellationToken);
 

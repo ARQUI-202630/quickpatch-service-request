@@ -7,7 +7,8 @@ using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.Se
 namespace QuickPatch.ServiceRequest.Application.ServiceRequests;
 
 /// <summary>
-/// Datos para crear una solicitud. <see cref="TenantId"/> y <see cref="ClientId"/> vienen del JWT, nunca del cuerpo.
+/// Datos para crear una solicitud. <see cref="TenantId"/>, <see cref="ClientId"/> y <see cref="CompanyId"/> vienen del JWT,
+/// nunca del cuerpo (RN-SR12): con empresa, la solicitud es de empresa y admite <see cref="SiteName"/> (contrato 1.9.0).
 /// </summary>
 public sealed record CreateServiceRequestCommand(
     Guid TenantId,
@@ -16,7 +17,9 @@ public sealed record CreateServiceRequestCommand(
     Guid CategoryId,
     string? Description,
     GeoPoint? Location,
-    string? AddressText);
+    string? AddressText,
+    Guid? CompanyId = null,
+    string? SiteName = null);
 
 public abstract record CreateServiceRequestResult
 {
@@ -56,7 +59,7 @@ public sealed class CreateServiceRequestHandler(
         {
             // Primero el resto de los campos: no se geocodifica una solicitud que de todas formas se rechazaría.
             DomainServiceRequest.ValidateFieldsWithoutLocation(
-                command.TenantId, command.ClientId, command.CategoryId, command.Description, command.AddressText);
+                command.TenantId, command.ClientId, command.CategoryId, command.Description, command.AddressText, command.CompanyId, command.SiteName);
             var geocoded = await geocoder.GeocodeAsync(command.AddressText!.Trim(), cancellationToken);
             if (geocoded is null)
             {
@@ -74,7 +77,9 @@ public sealed class CreateServiceRequestHandler(
             command.Description,
             location,
             command.AddressText,
-            now);
+            now,
+            command.CompanyId,
+            command.SiteName);
 
         if (!coverageArea.Contains(serviceRequest.Location))
         {

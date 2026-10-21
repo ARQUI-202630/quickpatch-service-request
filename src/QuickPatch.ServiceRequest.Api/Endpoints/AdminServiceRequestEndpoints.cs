@@ -1,4 +1,5 @@
 using QuickPatch.ServiceRequest.Api.Security;
+using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
 using QuickPatch.ServiceRequest.Domain.Common;
 
@@ -6,7 +7,10 @@ using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.Se
 
 namespace QuickPatch.ServiceRequest.Api.Endpoints;
 
-/// <summary>Esquema <c>AdminServiceRequest</c> (1.4.0): sin dirección, ubicación ni contacto (DD 8.3.15).</summary>
+/// <summary>
+/// Esquema <c>AdminServiceRequest</c> (1.4.0; 1.9.0 suma <c>description</c>, <c>clientType</c>, <c>companyId</c> y
+/// <c>siteName</c>): sin dirección, ubicación ni contacto (DD 8.3.15).
+/// </summary>
 public sealed record AdminServiceRequestResponse(
     Guid Id,
     string Status,
@@ -14,10 +18,14 @@ public sealed record AdminServiceRequestResponse(
     Guid ClientId,
     Guid? TechnicianId,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? AssignedAt)
+    DateTimeOffset? AssignedAt,
+    string Description,
+    string ClientType,
+    Guid? CompanyId,
+    string? SiteName)
 {
     public static AdminServiceRequestResponse From(DomainServiceRequest s) =>
-        new(s.Id, s.Status, s.CategoryId, s.ClientId, s.TechnicianId, s.CreatedAt, s.AssignedAt);
+        new(s.Id, s.Status, s.CategoryId, s.ClientId, s.TechnicianId, s.CreatedAt, s.AssignedAt, s.Description, s.ClientType, s.CompanyId, s.SiteName);
 }
 
 /// <summary>Esquema <c>AdminServiceRequestPage</c> (1.4.0).</summary>
@@ -45,7 +53,7 @@ public static partial class AdminServiceRequestEndpoints
     public static IEndpointRouteBuilder MapAdminServiceRequestEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet(ServiceRequestEndpoints.BasePath, ListForTenantAsync).WithName("listServiceRequests")
-            .RequireAuthorization(AuthenticatedUser.AdminTenantPolicy);
+            .RequireAuthorization(AuthenticatedUser.ListPolicy);
         app.MapGet(AdminSummaryPath, GetTenantSummaryAsync).WithName("getServiceRequestSummary")
             .RequireAuthorization(AuthenticatedUser.AdminTenantPolicy);
         app.MapGet(PlatformSummaryPath, GetPlatformSummaryAsync).WithName("getPlatformServiceRequestSummary")
@@ -77,8 +85,12 @@ public static partial class AdminServiceRequestEndpoints
 
         try
         {
+            // admin_tenant: todo el tenant; cliente: las suyas; empresa_contacto: las de su empresa (contrato 1.9.0, RN-SR14).
+            var scope = user.Role == AuthenticatedUser.AdminTenantRole
+                ? null
+                : new ListScope(user.UserId, user.Role == AuthenticatedUser.CompanyContactRole ? user.CompanyId : null);
             var result = await handler.HandleAsync(
-                new ListTenantServiceRequestsQuery(user.TenantId, status, pageNumber, pageSize), cancellationToken);
+                new ListTenantServiceRequestsQuery(user.TenantId, status, pageNumber, pageSize, scope), cancellationToken);
             return Results.Ok(new AdminServiceRequestPageResponse(
                 result.Items.Select(AdminServiceRequestResponse.From).ToList(), result.Page, result.Size, result.TotalItems));
         }

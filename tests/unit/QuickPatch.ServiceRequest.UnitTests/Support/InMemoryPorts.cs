@@ -59,6 +59,10 @@ public sealed class InMemoryStore :
     public Task<DomainServiceRequest?> FindForClientAsync(Guid id, Guid clientId, CancellationToken cancellationToken) =>
         Task.FromResult(ServiceRequests.SingleOrDefault(x => x.TenantId == currentTenant && x.Id == id && x.ClientId == clientId));
 
+    public Task<DomainServiceRequest?> FindForCompanyMemberAsync(Guid id, Guid userId, Guid companyId, CancellationToken cancellationToken) =>
+        Task.FromResult(ServiceRequests.SingleOrDefault(
+            x => x.TenantId == currentTenant && x.Id == id && (x.ClientId == userId || x.CompanyId == companyId)));
+
     public Task<DomainServiceRequest?> FindForTechnicianAsync(Guid id, Guid technicianId, CancellationToken cancellationToken) =>
         Task.FromResult(ServiceRequests.SingleOrDefault(x => x.TenantId == currentTenant && x.Id == id && x.TechnicianId == technicianId));
 
@@ -80,13 +84,14 @@ public sealed class InMemoryStore :
     }
 
     public Task<(IReadOnlyList<DomainServiceRequest> Items, int Total)> ListForTenantAsync(
-        string? status, int skip, int take, CancellationToken cancellationToken)
+        string? status, ListScope? scope, int skip, int take, CancellationToken cancellationToken)
     {
         List<DomainServiceRequest> matches;
         lock (this)
         {
             matches = ServiceRequests
                 .Where(x => x.TenantId == currentTenant && (status is null || x.Status == status))
+                .Where(x => scope is null || x.ClientId == scope.ClientId || (scope.CompanyId is { } c && x.CompanyId == c))
                 .OrderByDescending(x => x.CreatedAt)
                 .ThenBy(x => x.Id)
                 .ToList();
