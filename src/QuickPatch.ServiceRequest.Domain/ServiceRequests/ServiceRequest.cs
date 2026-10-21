@@ -288,6 +288,12 @@ public sealed class ServiceRequest
     /// </summary>
     public bool TryReturnToAssigned() => TryMove(ServiceRequestStatus.Cotizado, ServiceRequestStatus.Asignado);
 
+    /// <summary>
+    /// Payments confirmó el pago (<c>payment.approved</c>, RN-SR4): <c>completado</c> pasa a <c>pagado</c>. False, sin cambiar
+    /// nada, desde otro estado; un rechazo no llama aquí y la solicitud sigue en <c>completado</c> (RN-SR5).
+    /// </summary>
+    public bool TryMarkPaid() => TryMove(ServiceRequestStatus.Completado, ServiceRequestStatus.Pagado);
+
     /// <summary>Inicio del servicio (RF-14); null antes de <c>en_progreso</c>.</summary>
     public DateTimeOffset? StartedAt { get; private set; }
 

@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<GetPlatformSummaryHandler>();
         services.AddScoped<ApplyCategoryChangedHandler>();
         services.AddScoped<MatchingStatusHandler>();
+        services.AddScoped<QuickPatch.ServiceRequest.Application.Payments.PaymentEventsHandler>();
         return services;
     }
 }

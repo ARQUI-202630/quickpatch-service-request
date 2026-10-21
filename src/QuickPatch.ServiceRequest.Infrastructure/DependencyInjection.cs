@@ -168,6 +168,19 @@ public static class DependencyInjection
                 }).Build(),
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MatchingEventsConsumer>>()));
             services.AddHostedService(sp => sp.GetRequiredService<MatchingEventsConsumer>());
+
+            // Consumidor de los eventos de Payments (SCRUM-115): pasa la solicitud a pagado con payment.approved.
+            services.AddSingleton(sp => new PaymentEventsConsumer(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                new ConsumerBuilder<string, string>(new ConsumerConfig
+                {
+                    BootstrapServers = kafka.BootstrapServers,
+                    GroupId = kafka.ConsumerGroupId,
+                    EnableAutoCommit = false,
+                    AutoOffsetReset = AutoOffsetReset.Earliest,
+                }).Build(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PaymentEventsConsumer>>()));
+            services.AddHostedService(sp => sp.GetRequiredService<PaymentEventsConsumer>());
         }
 
         return services;

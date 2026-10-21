@@ -95,6 +95,12 @@ public sealed record NoTechnicianAvailableData(Guid ServiceRequestId, Guid Clien
 /// <summary><c>data</c> de <c>matching.search-resumed</c> v1.</summary>
 public sealed record SearchResumedData(Guid ServiceRequestId, Guid ClientId, string Trigger);
 
+/// <summary><c>data</c> de <c>payment.approved</c> v1 (quickpatch-kafka v0.9.0). Solo se usan la solicitud y el pago.</summary>
+public sealed record PaymentApprovedData(Guid PaymentId, Guid ServiceRequestId, string Amount, Guid InvoiceId, DateTimeOffset ApprovedAt);
+
+/// <summary><c>data</c> de <c>payment.rejected</c> v1 (quickpatch-kafka v0.9.0).</summary>
+public sealed record PaymentRejectedData(Guid PaymentId, Guid ServiceRequestId, string? ReasonCode, DateTimeOffset RejectedAt);
+
 public static class EventTypes
 {
     public const string ServiceRequestCreated = "service-request.created";
@@ -109,6 +115,8 @@ public static class EventTypes
     public const string TechnicianAssigned = "matching.technician-assigned";
     public const string NoTechnicianAvailable = "matching.no-technician-available";
     public const string SearchResumed = "matching.search-resumed";
+    public const string PaymentApproved = "payment.approved";
+    public const string PaymentRejected = "payment.rejected";
     public const string Producer = "service-request-service";
 }
 
