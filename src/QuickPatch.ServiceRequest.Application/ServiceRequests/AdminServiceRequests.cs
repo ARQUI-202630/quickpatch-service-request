@@ -91,8 +91,11 @@ public sealed record ServiceRequestCounts(IReadOnlyDictionary<string, int> BySta
     }
 }
 
-/// <summary>Lista del administrador del tenant (<c>GET /v1/service-requests</c>, contrato 1.4.0).</summary>
-public sealed record ListTenantServiceRequestsQuery(Guid TenantId, string? Status, int? Page, int? Size);
+/// <summary>
+/// Lista de <c>GET /v1/service-requests</c>: todas las del tenant para el <c>admin_tenant</c> (contrato 1.4.0) o, con
+/// <see cref="Scope"/>, las del cliente o las de su empresa (contrato 1.9.0, RN-SR14).
+/// </summary>
+public sealed record ListTenantServiceRequestsQuery(Guid TenantId, string? Status, int? Page, int? Size, ListScope? Scope = null);
 
 public sealed record TenantServiceRequestPage(IReadOnlyList<DomainServiceRequest> Items, int Page, int Size, int TotalItems);
 
@@ -109,7 +112,7 @@ public sealed class ListTenantServiceRequestsHandler(ITenantUnitOfWork unitOfWor
 
         var (items, total) = await unitOfWork.ExecuteAsync(
             query.TenantId,
-            ct => serviceRequests.ListForTenantAsync(query.Status, (page - 1) * size, size, ct),
+            ct => serviceRequests.ListForTenantAsync(query.Status, query.Scope, (page - 1) * size, size, ct),
             cancellationToken);
         return new TenantServiceRequestPage(items, page, size, total);
     }

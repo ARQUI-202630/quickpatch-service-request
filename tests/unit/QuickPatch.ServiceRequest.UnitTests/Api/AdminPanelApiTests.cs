@@ -68,8 +68,9 @@ public class AdminPanelApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(request.ClientId, item.GetProperty("clientId").GetGuid());
         Assert.Equal(technician, item.GetProperty("technicianId").GetGuid());
         Assert.Equal(
-            ["assignedAt", "categoryId", "clientId", "createdAt", "id", "status", "technicianId"],
+            ["assignedAt", "categoryId", "clientId", "clientType", "companyId", "createdAt", "description", "id", "siteName", "status", "technicianId"],
             item.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Equal("hogar", item.GetProperty("clientType").GetString());
     }
 
     [Fact]
@@ -153,7 +154,6 @@ public class AdminPanelApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Theory]
-    [InlineData("/v1/service-requests", "cliente")]
     [InlineData("/v1/service-requests", "tecnico")]
     [InlineData("/v1/service-requests", "admin_plataforma")]
     [InlineData("/v1/admin/service-requests/summary", "cliente")]

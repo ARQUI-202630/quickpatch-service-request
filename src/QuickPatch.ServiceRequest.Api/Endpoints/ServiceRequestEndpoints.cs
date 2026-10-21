@@ -9,7 +9,7 @@ using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.Se
 namespace QuickPatch.ServiceRequest.Api.Endpoints;
 
 /// <summary>Cuerpo de <c>POST /v1/service-requests</c> (contrato <c>service-request.v1.yaml</c>).</summary>
-public sealed record CreateServiceRequestRequest(Guid? CategoryId, string? Description, LocationDto? Location, string? AddressText);
+public sealed record CreateServiceRequestRequest(Guid? CategoryId, string? Description, LocationDto? Location, string? AddressText, string? SiteName = null);
 
 public sealed record LocationDto(double? Latitude, double? Longitude);
 
@@ -40,7 +40,10 @@ public sealed record ServiceRequestResponse(
     DateTimeOffset? CancelledAt,
     string? CancellationReason,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? CompletedAt)
+    DateTimeOffset? CompletedAt,
+    string ClientType,
+    Guid? CompanyId,
+    string? SiteName)
 {
     public static ServiceRequestResponse From(DomainServiceRequest s, TechnicianView? technician = null, ClientView? client = null) => new(
         s.Id,
@@ -57,7 +60,10 @@ public sealed record ServiceRequestResponse(
         s.CancelledAt,
         s.CancellationReason,
         s.StartedAt,
-        s.CompletedAt);
+        s.CompletedAt,
+        s.ClientType,
+        s.CompanyId,
+        s.SiteName);
 }
 
 /// <summary>Cuerpo de <c>POST /v1/service-requests/{id}/cancel</c> (contrato 1.5.0).</summary>
@@ -129,6 +135,16 @@ public static class ServiceRequestEndpoints
             return ValidationProblem(errors);
         }
 
+        // RN-SR12: la empresa sale del claim company_id. Un empresa_contacto sin empresa en el token no crea nada.
+        var companyId = user.Role == AuthenticatedUser.CompanyContactRole ? user.CompanyId : null;
+        if (user.Role == AuthenticatedUser.CompanyContactRole && companyId is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                type: Problems.Forbidden,
+                title: "El token no trae la empresa del usuario.");
+        }
+
         var command = new CreateServiceRequestCommand(
             user.TenantId,
             user.UserId,
@@ -136,7 +152,9 @@ public static class ServiceRequestEndpoints
             body.CategoryId!.Value,
             body.Description,
             body.Location is null ? null : new GeoPoint(body.Location.Latitude!.Value, body.Location.Longitude!.Value),
-            body.AddressText);
+            body.AddressText,
+            companyId,
+            body.SiteName);
 
         CreateServiceRequestResult result;
         try
@@ -265,7 +283,7 @@ public static class ServiceRequestEndpoints
         // El token se reenvía a Identity para leer los nombres (identity-internal.v1.yaml); nunca se registra.
         var token = context.Request.Headers.Authorization.ToString();
         token = token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? token["Bearer ".Length..].Trim() : string.Empty;
-        var viewer = new ServiceRequestViewer(user.UserId, user.TenantId, user.Role, token, CorrelationId.Get(context));
+        var viewer = new ServiceRequestViewer(user.UserId, user.TenantId, user.Role, token, CorrelationId.Get(context), user.CompanyId);
 
         var result = await handler.HandleAsync(viewer, id, cancellationToken);
         return result switch

@@ -11,6 +11,8 @@ public sealed class ServiceRequest
     public const int AddressMaxLength = 255;
     public const int CancellationReasonMinLength = 5;
     public const int CancellationReasonMaxLength = 500;
+    public const int SiteNameMinLength = 2;
+    public const int SiteNameMaxLength = 100;
 
     /// <summary>Estados anteriores a <c>en_progreso</c>, desde los que se puede cancelar (RN-SR7).</summary>
     public static readonly IReadOnlySet<string> CancellableStatuses = new HashSet<string>(StringComparer.Ordinal)
@@ -41,6 +43,7 @@ public sealed class ServiceRequest
         AddressText = addressText;
         Status = ServiceRequestStatus.BuscandoTecnico;
         CreatedAt = createdAt;
+        ClientType = ClientTypes.Hogar;
     }
 
     public Guid Id { get; }
@@ -52,6 +55,15 @@ public sealed class ServiceRequest
     public Guid CategoryId { get; }
 
     public Guid? TechnicianId { get; private set; }
+
+    /// <summary><c>hogar</c> o <c>empresa</c>, según el rol de quien la creó (RN-SR12, contrato 1.9.0).</summary>
+    public string ClientType { get; private set; }
+
+    /// <summary>Empresa cliente de la solicitud (claim <c>company_id</c>); null en las de hogar.</summary>
+    public Guid? CompanyId { get; private set; }
+
+    /// <summary>Nombre de la sede de la empresa (contrato 1.9.0); null si no se indicó.</summary>
+    public string? SiteName { get; private set; }
 
     /// <summary>Momento en que el técnico aceptó la oferta (<c>matching.technician-assigned</c>); null antes.</summary>
     public DateTimeOffset? AssignedAt { get; private set; }
@@ -74,7 +86,8 @@ public sealed class ServiceRequest
 
     /// <summary>
     /// Crea una solicitud en estado <c>buscando_tecnico</c> (RF-07), validando RN-SR1 y RN-SR11.
-    /// La cobertura (RN-SR9) y la categoría (RN-SR10) las valida el caso de uso.
+    /// La cobertura (RN-SR9) y la categoría (RN-SR10) las valida el caso de uso. Con <paramref name="companyId"/> es de
+    /// empresa (RF-08, RN-SR12) y admite <paramref name="siteName"/>; sin empresa, la sede no se admite.
     /// </summary>
     public static ServiceRequest Create(
         Guid tenantId,
@@ -83,9 +96,11 @@ public sealed class ServiceRequest
         string? description,
         GeoPoint? location,
         string? addressText,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        Guid? companyId = null,
+        string? siteName = null)
     {
-        var errors = CollectFieldErrors(tenantId, clientId, categoryId, description, addressText);
+        var errors = CollectFieldErrors(tenantId, clientId, categoryId, description, addressText, companyId, siteName);
         if (location is null || !location.IsValid)
         {
             errors["location"] = ["La ubicación debe tener una latitud entre -90 y 90 y una longitud entre -180 y 180."];
@@ -96,8 +111,14 @@ public sealed class ServiceRequest
             throw new DomainValidationException(errors);
         }
 
+        var sede = string.IsNullOrWhiteSpace(siteName) ? null : siteName.Trim();
         return new ServiceRequest(
-            Guid.CreateVersion7(createdAt), tenantId, clientId, categoryId, description!.Trim(), location!, addressText!.Trim(), createdAt);
+            Guid.CreateVersion7(createdAt), tenantId, clientId, categoryId, description!.Trim(), location!, addressText!.Trim(), createdAt)
+        {
+            ClientType = companyId is null ? ClientTypes.Hogar : ClientTypes.Empresa,
+            CompanyId = companyId,
+            SiteName = sede,
+        };
     }
 
     /// <summary>
@@ -105,9 +126,9 @@ public sealed class ServiceRequest
     /// (contrato 1.3.0: sin <c>location</c>, ServiceRequest geocodifica <c>addressText</c>).
     /// </summary>
     public static void ValidateFieldsWithoutLocation(
-        Guid tenantId, Guid clientId, Guid categoryId, string? description, string? addressText)
+        Guid tenantId, Guid clientId, Guid categoryId, string? description, string? addressText, Guid? companyId = null, string? siteName = null)
     {
-        var errors = CollectFieldErrors(tenantId, clientId, categoryId, description, addressText);
+        var errors = CollectFieldErrors(tenantId, clientId, categoryId, description, addressText, companyId, siteName);
         if (errors.Count > 0)
         {
             throw new DomainValidationException(errors);
@@ -130,7 +151,7 @@ public sealed class ServiceRequest
     }
 
     private static Dictionary<string, string[]> CollectFieldErrors(
-        Guid tenantId, Guid clientId, Guid categoryId, string? description, string? addressText)
+        Guid tenantId, Guid clientId, Guid categoryId, string? description, string? addressText, Guid? companyId, string? siteName)
     {
         var errors = new Dictionary<string, string[]>();
         var descripcion = description?.Trim() ?? string.Empty;
@@ -161,8 +182,34 @@ public sealed class ServiceRequest
             errors["addressText"] = [$"La dirección debe tener entre {AddressMinLength} y {AddressMaxLength} caracteres."];
         }
 
+        if (companyId == Guid.Empty)
+        {
+            errors["companyId"] = ["La empresa del token no es válida."];
+        }
+
+        // Una sede en blanco cuenta como sin sede.
+        if (!string.IsNullOrWhiteSpace(siteName))
+        {
+            var sede = siteName.Trim();
+            if (companyId is null)
+            {
+                errors["siteName"] = ["La sede solo aplica a las solicitudes de empresa."];
+            }
+            else if (sede.Length is < SiteNameMinLength or > SiteNameMaxLength)
+            {
+                errors["siteName"] = [$"La sede debe tener entre {SiteNameMinLength} y {SiteNameMaxLength} caracteres."];
+            }
+        }
+
         return errors;
     }
+
+    /// <summary>
+    /// Si la ve <paramref name="userId"/> como dueña: la creó, o es de su empresa (RN-SR14). <paramref name="companyId"/> sale
+    /// del claim <c>company_id</c> del token.
+    /// </summary>
+    public bool IsVisibleToRequester(Guid userId, Guid? companyId) =>
+        ClientId == userId || (CompanyId is { } empresa && companyId == empresa);
 
     /// <summary>
     /// <c>matching.technician-assigned</c>: <c>buscando_tecnico</c> pasa a <c>asignado</c> con el técnico y la hora de
@@ -353,13 +400,25 @@ public sealed class ServiceRequest
         string addressText,
         string status,
         DateTimeOffset createdAt,
-        DateTimeOffset? assignedAt = null) =>
+        DateTimeOffset? assignedAt = null,
+        Guid? companyId = null,
+        string? siteName = null) =>
         new(id, tenantId, clientId, categoryId, description, location, addressText, createdAt)
         {
             TechnicianId = technicianId,
             Status = status,
             AssignedAt = assignedAt,
+            ClientType = companyId is null ? ClientTypes.Hogar : ClientTypes.Empresa,
+            CompanyId = companyId,
+            SiteName = siteName,
         };
+}
+
+/// <summary>Tipo de cliente de la solicitud (<c>client_type</c>, RN-SR12).</summary>
+public static class ClientTypes
+{
+    public const string Hogar = "hogar";
+    public const string Empresa = "empresa";
 }
 
 /// <summary>Quién canceló la solicitud (<c>cancelled_by_type</c>, RN-SR8).</summary>

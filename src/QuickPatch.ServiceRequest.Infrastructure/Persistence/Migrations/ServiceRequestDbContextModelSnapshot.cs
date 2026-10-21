@@ -214,6 +214,18 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("client_id");
 
+                    b.Property<string>("ClientType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("hogar")
+                        .HasColumnName("client_type");
+
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");
@@ -235,6 +247,11 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("MatchingUpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("matching_updated_at");
+
+                    b.Property<string>("SiteName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("site_name");
 
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone")
@@ -263,6 +280,10 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "ClientId")
                         .HasDatabaseName("ix_service_requests_tenant_client");
+
+                    b.HasIndex("TenantId", "CompanyId")
+                        .HasDatabaseName("ix_service_requests_company")
+                        .HasFilter("company_id IS NOT NULL");
 
                     b.HasIndex("TenantId", "TechnicianId", "Status")
                         .HasDatabaseName("ix_service_requests_tenant_technician_status");
