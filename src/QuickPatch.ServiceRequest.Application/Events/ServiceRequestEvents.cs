@@ -41,7 +41,7 @@ public static class ServiceRequestEvents
     public static OutboxMessage Completed(DomainServiceRequest request, Quote acceptedQuote, Guid correlationId, DateTimeOffset now) =>
         Build(request, EventTypes.ServiceCompleted, correlationId, now,
             new ServiceCompletedData(
-                request.Id, request.ClientId, null, request.TechnicianId!.Value, acceptedQuote.Id,
+                request.Id, request.ClientId, request.CompanyId, request.TechnicianId!.Value, acceptedQuote.Id,
                 Quote.FormatMoney(acceptedQuote.TotalAmount), request.CompletedAt!.Value));
 
     private static OutboxMessage Build<TData>(

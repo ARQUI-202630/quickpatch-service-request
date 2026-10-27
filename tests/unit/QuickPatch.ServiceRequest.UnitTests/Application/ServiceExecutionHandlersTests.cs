@@ -29,11 +29,11 @@ public class ServiceExecutionHandlersTests
     private readonly Guid client = Guid.NewGuid();
     private readonly Guid technician = Guid.NewGuid();
 
-    private DomainServiceRequest Seed(string status, Guid? tenantId = null)
+    private DomainServiceRequest Seed(string status, Guid? tenantId = null, Guid? companyId = null)
     {
         var request = DomainServiceRequest.Restore(
             Guid.NewGuid(), tenantId ?? tenant, client, Guid.NewGuid(), technician, "Fuga de agua en la cocina",
-            new GeoPoint(4.6486, -74.063), "Calle 63 # 9-45", status, Now.AddHours(-3), Now.AddHours(-2));
+            new GeoPoint(4.6486, -74.063), "Calle 63 # 9-45", status, Now.AddHours(-3), Now.AddHours(-2), companyId);
         store.ServiceRequests.Add(request);
         return request;
     }
@@ -233,6 +233,22 @@ public class ServiceExecutionHandlersTests
         Assert.Equal("185000.00", completed.GetProperty("totalAmount").GetString());
         Assert.Equal(technician, completed.GetProperty("technicianId").GetGuid());
         Assert.Equal(JsonValueKind.Null, completed.GetProperty("companyId").ValueKind);
+    }
+
+    [Fact]
+    public async Task Completar_SolicitudDeEmpresa_EventoLlevaLaEmpresa()
+    {
+        // Payments deja pagar a cualquier empresa_contacto de la empresa solo si el evento trae la empresa (RN-P6).
+        var company = Guid.NewGuid();
+        var request = Seed(ServiceRequestStatus.EnProgreso, companyId: company);
+        SeedAcceptedQuote(request);
+        SeedEvidence(request, 1);
+
+        Assert.IsType<ServiceStepResult.Done>(await Complete(request.Id));
+
+        var completed = Data(store.Outbox[0]);
+        Assert.Equal(company, completed.GetProperty("companyId").GetGuid());
+        Assert.Equal(client, completed.GetProperty("clientId").GetGuid());
     }
 
     [Theory]

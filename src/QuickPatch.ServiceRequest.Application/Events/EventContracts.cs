@@ -72,7 +72,8 @@ public sealed record ServiceStartedData(Guid ServiceRequestId, Guid ClientId, Gu
 
 /// <summary>
 /// <c>data</c> de <c>service-request.completed</c> v1 (RF-15, SCRUM-94): el total de la cotización aceptada es el monto del
-/// pago (RN-P4). <see cref="CompanyId"/> es nulo mientras no exista la solicitud de empresa (RF-08).
+/// pago (RN-P4). <see cref="CompanyId"/> es la empresa de una solicitud de empresa (RF-08) y nulo en una de hogar: con
+/// ella Payments deja pagar a cualquier <c>empresa_contacto</c> de esa empresa (RN-P6).
 /// </summary>
 public sealed record ServiceCompletedData(
     Guid ServiceRequestId,
