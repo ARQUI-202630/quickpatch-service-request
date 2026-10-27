@@ -2,6 +2,7 @@ using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Categories;
 using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
+using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
@@ -16,7 +17,7 @@ namespace QuickPatch.ServiceRequest.UnitTests.Support;
 /// </summary>
 public sealed class InMemoryStore :
     ITenantUnitOfWork, IServiceRequestRepository, ICategoryReplicaRepository, IProcessedEventRepository, IOutbox,
-    IPlatformServiceRequestCounter, IAuditLog, IQuoteRepository, IExpiredQuoteFinder, IEvidenceRepository
+    IPlatformServiceRequestCounter, IAuditLog, IQuoteRepository, IExpiredQuoteFinder, IEvidenceRepository, IRatingRepository
 {
     public List<AuditEntry> Audit { get; } = [];
 
@@ -200,6 +201,24 @@ public sealed class InMemoryStore :
                 .ThenBy(x => x.Id)
                 .ToList();
             return Task.FromResult(rows);
+        }
+    }
+
+    public List<Rating> Ratings { get; } = [];
+
+    public void Add(Rating rating)
+    {
+        lock (this)
+        {
+            Ratings.Add(rating);
+        }
+    }
+
+    Task<bool> IRatingRepository.ExistsAsync(Guid serviceRequestId, CancellationToken cancellationToken)
+    {
+        lock (this)
+        {
+            return Task.FromResult(Ratings.Any(x => x.TenantId == currentTenant && x.ServiceRequestId == serviceRequestId));
         }
     }
 

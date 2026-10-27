@@ -18,7 +18,7 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
@@ -171,6 +171,48 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                         .HasFilter("status = 'pendiente'");
 
                     b.ToTable("quotes", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Ratings.Rating", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer")
+                        .HasColumnName("score");
+
+                    b.Property<Guid>("ServiceRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_request_id");
+
+                    b.Property<Guid>("TechnicianId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("technician_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ux_ratings_service_request")
+                        .IsUnique();
+
+                    b.ToTable("ratings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ratings_score", "score BETWEEN 1 AND 5");
+                        });
                 });
 
             modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", b =>
@@ -439,6 +481,15 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Quotes.Quote", b =>
+                {
+                    b.HasOne("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Ratings.Rating", b =>
                 {
                     b.HasOne("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", null)
                         .WithMany()

@@ -6,6 +6,7 @@ using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Categories;
 using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
+using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
@@ -147,6 +148,15 @@ public sealed class EvidenceRepository(ServiceRequestDbContext db) : IEvidenceRe
             .OrderBy(x => x.UploadedAt)
             .ThenBy(x => x.Id)
             .ToListAsync(cancellationToken);
+}
+
+/// <summary>Calificaciones bajo RLS (DD 5.9). La fila solo se inserta: una calificación no se edita (ADR-027).</summary>
+public sealed class RatingRepository(ServiceRequestDbContext db) : IRatingRepository
+{
+    public void Add(Rating rating) => db.Ratings.Add(rating);
+
+    public Task<bool> ExistsAsync(Guid serviceRequestId, CancellationToken cancellationToken) =>
+        db.Ratings.AnyAsync(x => x.ServiceRequestId == serviceRequestId, cancellationToken);
 }
 
 public sealed class CategoryReplicaRepository(ServiceRequestDbContext db) : ICategoryReplicaRepository

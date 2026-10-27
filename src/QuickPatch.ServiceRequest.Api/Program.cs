@@ -45,6 +45,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 app.MapServiceRequestEndpoints();
 app.MapQuoteEndpoints();
 app.MapExecutionEndpoints();
+app.MapRatingEndpoints();
 app.MapReferenceEndpoints();
 app.MapAdminServiceRequestEndpoints();
 

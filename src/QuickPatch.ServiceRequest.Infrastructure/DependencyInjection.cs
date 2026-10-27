@@ -91,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<IQuoteRepository, QuoteRepository>();
         services.AddScoped<IExpiredQuoteFinder, ExpiredQuoteFinder>();
         services.AddScoped<IEvidenceRepository, EvidenceRepository>();
+        services.AddScoped<IRatingRepository, RatingRepository>();
 
         // Fotos de evidencia en Garage (RN-E3, ADR-016).
         var evidence = configuration.GetSection(EvidenceStorageOptions.Section).Get<EvidenceStorageOptions>() ?? new EvidenceStorageOptions();
