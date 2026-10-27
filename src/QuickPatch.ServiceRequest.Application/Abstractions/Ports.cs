@@ -1,6 +1,7 @@
 using QuickPatch.ServiceRequest.Domain.Categories;
 using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
+using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
@@ -113,6 +114,18 @@ public interface IEvidenceRepository
 
     /// <summary>Evidencias de la solicitud, de la más antigua a la más reciente.</summary>
     Task<IReadOnlyList<ServiceEvidence>> ListAsync(Guid serviceRequestId, CancellationToken cancellationToken);
+}
+
+/// <summary>Persistencia de calificaciones (tabla <c>ratings</c>, DD 5.9), siempre bajo el tenant de la transacción.</summary>
+public interface IRatingRepository
+{
+    void Add(Rating rating);
+
+    /// <summary>
+    /// Si la solicitud ya tiene calificación (RN-R2). Se consulta en la transacción que ya bloqueó la fila de la solicitud;
+    /// el índice único sobre <c>service_request_id</c> respalda la regla en la base.
+    /// </summary>
+    Task<bool> ExistsAsync(Guid serviceRequestId, CancellationToken cancellationToken);
 }
 
 /// <summary>

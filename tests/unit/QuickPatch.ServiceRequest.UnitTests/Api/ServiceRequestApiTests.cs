@@ -52,6 +52,7 @@ public class ApiFactoryBase : WebApplicationFactory<Program>
             services.AddSingleton<IQuoteRepository>(Store);
             services.AddSingleton<IExpiredQuoteFinder>(Store);
             services.AddSingleton<IEvidenceRepository>(Store);
+            services.AddSingleton<IRatingRepository>(Store);
             services.AddSingleton<IEvidenceStorage>(EvidenceStorage);
             services.AddSingleton<IUserDirectory>(Directory);
             services.AddSingleton<IGeocoder>(Geocoder);

@@ -4,6 +4,7 @@ using QuickPatch.ServiceRequest.Application.Categories;
 using QuickPatch.ServiceRequest.Application.Execution;
 using QuickPatch.ServiceRequest.Application.Matching;
 using QuickPatch.ServiceRequest.Application.Quotes;
+using QuickPatch.ServiceRequest.Application.Ratings;
 using QuickPatch.ServiceRequest.Application.References;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
 
@@ -25,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<ListTechnicianServiceRequestsHandler>();
         services.AddScoped<ListTenantServiceRequestsHandler>();
         services.AddScoped<CancelServiceRequestHandler>();
+        services.AddScoped<RateServiceRequestHandler>();
         services.AddScoped<IssueQuoteHandler>();
         services.AddScoped<ListQuotesHandler>();
         services.AddScoped<RespondQuoteHandler>();

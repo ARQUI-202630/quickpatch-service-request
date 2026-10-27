@@ -84,6 +84,12 @@ public sealed record ServiceCompletedData(
     string TotalAmount,
     DateTimeOffset CompletedAt);
 
+/// <summary>
+/// <c>data</c> de <c>service-request.rated</c> v1 (RF-12, DD 8.4.2, ADR-027): lo consume Ranking para la reputación del
+/// técnico. El comentario no viaja: Ranking no lo necesita y así no sale de ServiceRequest.
+/// </summary>
+public sealed record ServiceRatedData(Guid ServiceRequestId, Guid TechnicianId, int Score, DateTimeOffset RatedAt);
+
 /// <summary><c>data</c> de <c>catalog.category-changed</c> v1; <see cref="Description"/> es opcional desde quickpatch-kafka v0.8.0.</summary>
 public sealed record CategoryChangedData(Guid CategoryId, string Name, bool Active, DateTimeOffset UpdatedAt, string? Description = null);
 
@@ -112,6 +118,7 @@ public static class EventTypes
     public const string QuoteRejected = "service-request.quote-rejected";
     public const string ServiceStarted = "service-request.started";
     public const string ServiceCompleted = "service-request.completed";
+    public const string ServiceRated = "service-request.rated";
     public const string CategoryChanged = "catalog.category-changed";
     public const string TechnicianAssigned = "matching.technician-assigned";
     public const string NoTechnicianAvailable = "matching.no-technician-available";

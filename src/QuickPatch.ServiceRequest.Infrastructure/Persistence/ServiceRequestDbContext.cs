@@ -6,6 +6,7 @@ using NetTopologySuite.Geometries;
 using QuickPatch.ServiceRequest.Domain.Categories;
 using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
+using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
@@ -22,6 +23,8 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
     public DbSet<Quote> Quotes => Set<Quote>();
 
     public DbSet<ServiceEvidence> Evidence => Set<ServiceEvidence>();
+
+    public DbSet<Rating> Ratings => Set<Rating>();
 
     public DbSet<OutboxEventRecord> OutboxEvents => Set<OutboxEventRecord>();
 
@@ -115,6 +118,23 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property(x => x.UploadedAt).HasColumnName("uploaded_at");
             e.HasOne<DomainServiceRequest>().WithMany().HasForeignKey(x => x.ServiceRequestId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => x.ServiceRequestId, "ix_service_evidence_service_request");
+        });
+
+        // Calificaciones (DD 5.9, RF-12, ADR-027). RLS y los permisos los agrega la migración Calificaciones. RN-R1 es el CHECK
+        // del puntaje y RN-R2 el índice único por solicitud.
+        modelBuilder.Entity<Rating>(e =>
+        {
+            e.ToTable("ratings", t => t.HasCheckConstraint("ck_ratings_score", "score BETWEEN 1 AND 5"));
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            e.Property(x => x.TenantId).HasColumnName("tenant_id");
+            e.Property(x => x.ServiceRequestId).HasColumnName("service_request_id");
+            e.Property(x => x.TechnicianId).HasColumnName("technician_id");
+            e.Property(x => x.Score).HasColumnName("score");
+            e.Property(x => x.Comment).HasColumnName("comment").HasMaxLength(Rating.MaxCommentLength);
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.HasOne<DomainServiceRequest>().WithMany().HasForeignKey(x => x.ServiceRequestId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.ServiceRequestId, "ux_ratings_service_request").IsUnique();
         });
 
         modelBuilder.Entity<CategoryReplica>(e =>

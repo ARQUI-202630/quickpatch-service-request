@@ -13,6 +13,7 @@ public static class Problems
     public const string QuoteLimitReached = Base + "limite-de-cotizaciones";
     public const string EvidenceLimitReached = Base + "limite-de-evidencias";
     public const string EvidenceRequired = Base + "evidencia-requerida";
+    public const string AlreadyRated = Base + "ya-calificada";
     public const string NotFound = Base + "no-encontrado";
     public const string Unauthorized = Base + "no-autenticado";
     public const string Forbidden = Base + "no-autorizado";

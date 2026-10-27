@@ -1,5 +1,6 @@
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Domain.Quotes;
+using QuickPatch.ServiceRequest.Domain.Ratings;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -43,6 +44,10 @@ public static class ServiceRequestEvents
             new ServiceCompletedData(
                 request.Id, request.ClientId, request.CompanyId, request.TechnicianId!.Value, acceptedQuote.Id,
                 Quote.FormatMoney(acceptedQuote.TotalAmount), request.CompletedAt!.Value));
+
+    public static OutboxMessage Rated(DomainServiceRequest request, Rating rating, Guid correlationId) =>
+        Build(request, EventTypes.ServiceRated, correlationId, rating.CreatedAt,
+            new ServiceRatedData(request.Id, rating.TechnicianId, rating.Score, rating.CreatedAt));
 
     private static OutboxMessage Build<TData>(
         DomainServiceRequest request, string eventType, Guid correlationId, DateTimeOffset now, TData data)
