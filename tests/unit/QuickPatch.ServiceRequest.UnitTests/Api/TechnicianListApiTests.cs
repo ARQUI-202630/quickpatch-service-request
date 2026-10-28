@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 using QuickPatch.ServiceRequest.UnitTests.Support;
 
@@ -9,7 +10,7 @@ using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.Se
 
 namespace QuickPatch.ServiceRequest.UnitTests.Api;
 
-/// <summary><c>GET /v1/technicians/me/service-requests</c> (contrato 1.2.0, RF-17, SCRUM-464).</summary>
+/// <summary><c>GET /v1/technicians/me/service-requests</c> (contrato 1.10.0, RF-17, SCRUM-464 y SCRUM-100).</summary>
 public class TechnicianListApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 14, 15, 0, 0, TimeSpan.Zero);
@@ -64,10 +65,33 @@ public class TechnicianListApiTests(ApiFactory factory) : IClassFixture<ApiFacto
         Assert.Equal("Fuga de agua en la cocina", item.GetProperty("description").GetString());
         Assert.Equal(Now.AddMinutes(1), item.GetProperty("assignedAt").GetDateTimeOffset());
 
-        // RN-SR13: el historial no trae datos de contacto.
+        // RN-SR13: el historial no trae datos de contacto. Sin calificación, score y ratedAt van en null (1.10.0).
         Assert.Equal(
-            ["assignedAt", "categoryId", "createdAt", "description", "id", "status"],
+            ["assignedAt", "categoryId", "createdAt", "description", "id", "ratedAt", "score", "status"],
             item.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("score").ValueKind);
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("ratedAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task Calificada_TraeScoreYRatedAt_SinElComentario()
+    {
+        var tenant = Guid.NewGuid();
+        var technician = Guid.NewGuid();
+        var request = Seed(tenant, technician, ServiceRequestStatus.Pagado);
+        lock (factory.Store)
+        {
+            factory.Store.Ratings.Add(Rating.Create(tenant, request.Id, technician, 5, "Excelente trabajo", Now.AddHours(1)));
+        }
+
+        using var http = As(technician, tenant, "tecnico");
+
+        using var response = await http.GetAsync(List);
+
+        var item = Assert.Single((await Json(response)).GetProperty("items").EnumerateArray());
+        Assert.Equal(5, item.GetProperty("score").GetInt32());
+        Assert.Equal(Now.AddHours(1), item.GetProperty("ratedAt").GetDateTimeOffset());
+        Assert.False(item.TryGetProperty("comment", out _));
     }
 
     [Fact]

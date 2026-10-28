@@ -1,5 +1,6 @@
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
 using QuickPatch.ServiceRequest.Domain.Common;
+using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 using QuickPatch.ServiceRequest.UnitTests.Support;
 
@@ -24,7 +25,7 @@ public class TechnicianListTests
         return request;
     }
 
-    private ListTechnicianServiceRequestsHandler Handler() => new(store, store);
+    private ListTechnicianServiceRequestsHandler Handler() => new(store, store, store);
 
     private Task<TechnicianServiceRequestPage> List(string? status = null, int? page = null, int? size = null) =>
         Handler().HandleAsync(new ListTechnicianServiceRequestsQuery(tenant, technician, status, page, size), CancellationToken.None);
@@ -65,6 +66,23 @@ public class TechnicianListTests
         Assert.All(segunda.Items, x => Assert.Equal(ServiceRequestStatus.Asignado, x.Status));
         Assert.Equal([Now.AddMinutes(2), Now.AddMinutes(1)], segunda.Items.Select(x => x.AssignedAt!.Value));
         Assert.Single(pagadas.Items);
+    }
+
+    [Fact]
+    public async Task Historial_TraeLaCalificacionDeLasPagadas_SoloDeSuTenant()
+    {
+        var calificada = Seed(tenant, technician, ServiceRequestStatus.Pagado, 5);
+        var sinCalificar = Seed(tenant, technician, ServiceRequestStatus.Pagado, 4);
+        var deOtroTenant = Seed(Guid.NewGuid(), technician, ServiceRequestStatus.Pagado, 3);
+        store.Ratings.Add(Rating.Create(tenant, calificada.Id, technician, 4, "Muy puntual", Now.AddHours(2)));
+        store.Ratings.Add(Rating.Create(deOtroTenant.TenantId, deOtroTenant.Id, technician, 1, null, Now.AddHours(3)));
+
+        var result = await List(ServiceRequestStatus.Pagado);
+
+        Assert.Equal([calificada.Id, sinCalificar.Id], result.Items.Select(x => x.Id));
+        Assert.Equal([calificada.Id], result.Ratings.Keys);
+        Assert.Equal((4, Now.AddHours(2)), (result.Ratings[calificada.Id].Score, result.Ratings[calificada.Id].CreatedAt));
+        Assert.Equal(1, store.Transactions);
     }
 
     [Theory]

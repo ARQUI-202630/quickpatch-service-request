@@ -157,6 +157,19 @@ public sealed class RatingRepository(ServiceRequestDbContext db) : IRatingReposi
 
     public Task<bool> ExistsAsync(Guid serviceRequestId, CancellationToken cancellationToken) =>
         db.Ratings.AnyAsync(x => x.ServiceRequestId == serviceRequestId, cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, Rating>> FindByServiceRequestsAsync(
+        IReadOnlyCollection<Guid> serviceRequestIds, CancellationToken cancellationToken)
+    {
+        if (serviceRequestIds.Count == 0)
+        {
+            return new Dictionary<Guid, Rating>();
+        }
+
+        return await db.Ratings.AsNoTracking()
+            .Where(x => serviceRequestIds.Contains(x.ServiceRequestId))
+            .ToDictionaryAsync(x => x.ServiceRequestId, cancellationToken);
+    }
 }
 
 public sealed class CategoryReplicaRepository(ServiceRequestDbContext db) : ICategoryReplicaRepository
