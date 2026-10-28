@@ -22,9 +22,10 @@ public class CreateServiceRequestHandlerTests
     private readonly Guid category = Guid.NewGuid();
     private readonly Guid correlation = Guid.NewGuid();
     private readonly FakeGeocoder geocoder = new();
+    private readonly FakeLocalityCatalog localities = new();
 
     private CreateServiceRequestHandler Handler() =>
-        new(store, store, store, store, geocoder, CoverageArea.Bogota, new FixedClock(Now));
+        new(store, store, store, store, geocoder, localities, CoverageArea.Bogota, new FixedClock(Now));
 
     private CreateServiceRequestCommand CommandWithoutLocation() => Command() with { Location = null };
 
@@ -73,6 +74,34 @@ public class CreateServiceRequestHandlerTests
         Assert.Equal(0, store.Transactions);
         Assert.Empty(store.ServiceRequests);
         Assert.Empty(store.Outbox);
+    }
+
+    [Fact]
+    public async Task Handle_DentroDelRectanguloPeroFueraDeLasLocalidades_NoAbreTransaccion()
+    {
+        // SCRUM-636: un GPS en Soacha (4,5794; -74,2168) cae en el rectángulo de RN-SR9 pero en ninguna localidad.
+        store.Categories.Add(new CategoryReplica(category, tenant, "Plomería", true, Now));
+        localities.Result = null;
+
+        var result = await Handler().HandleAsync(Command(new GeoPoint(4.5794, -74.2168)), CancellationToken.None);
+
+        Assert.IsType<CreateServiceRequestResult.OutOfCoverage>(result);
+        Assert.Equal(0, store.Transactions);
+        Assert.Empty(store.ServiceRequests);
+        Assert.Empty(store.Outbox);
+    }
+
+    [Fact]
+    public async Task Handle_SinUbicacionYPuntoFueraDeLasLocalidades_RechazaIgualQueLaVistaPrevia()
+    {
+        // SCRUM-636: una dirección de Cali que el geocodificador ubica en Soacha da 422 en la vista previa; al crear, también.
+        geocoder.Result = new GeocodedAddress(new GeoPoint(4.5794, -74.2168), "Soacha");
+        localities.Result = null;
+
+        var result = await Handler().HandleAsync(CommandWithoutLocation(), CancellationToken.None);
+
+        Assert.IsType<CreateServiceRequestResult.OutOfCoverage>(result);
+        Assert.Equal(0, store.Transactions);
     }
 
     [Fact]

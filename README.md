@@ -71,7 +71,7 @@ dotnet run --project src/QuickPatch.ServiceRequest.Api
 |Pago (RN-SR4, RN-SR5): `payment.approved` pasa la solicitud de `completado` a `pagado` y publica `service-request.status-changed` para el aviso en tiempo real; `payment.rejected` no cambia el estado y el cliente puede reintentar. Idempotente por `eventId`, bajo el tenant del evento|`events/payment.*.v1.json` (`quickpatch-kafka` v0.9.0)|SCRUM-42 / SCRUM-115|
 |Cada cambio de estado aplicado publica `service-request.status-changed` por Outbox en la misma transacción, con `previousStatus`, `status` y el técnico si lo hay. Un evento de Matching viejo, repetido o que no corresponde al estado no lo publica, así que Communication avisa solo lo que pasó|`events/service-request.status-changed.v1.json` (`quickpatch-kafka`, SCRUM-466)|SCRUM-31 / SCRUM-466|
 
-Reglas aplicadas (DD, sección 7.4): RN-SR1, RN-SR9 (cobertura de Bogotá, configurable en `Coverage`), RN-SR10 (categoría activa en el tenant) y RN-SR11 (longitudes).
+Reglas aplicadas (DD, sección 7.4): RN-SR1, RN-SR9 (cobertura de Bogotá: el rectángulo configurable en `Coverage` y una de las 20 localidades, igual con GPS, con dirección y en la vista previa; SCRUM-636), RN-SR10 (categoría activa en el tenant) y RN-SR11 (longitudes).
 
 ## Seguridad y datos
 

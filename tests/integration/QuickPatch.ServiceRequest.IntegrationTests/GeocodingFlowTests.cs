@@ -95,6 +95,42 @@ public class GeocodingFlowTests(ServiceRequestEnvironment env)
     }
 
     [Fact]
+    public async Task Crear_ConGpsEnSoacha_Responde422FueraDeCobertura()
+    {
+        // SCRUM-636: Soacha queda dentro del rectángulo de RN-SR9 pero fuera de las 20 localidades.
+        using var http = As(Guid.NewGuid());
+
+        using var response = await http.PostAsJsonAsync(new Uri("/v1/service-requests", UriKind.Relative), new
+        {
+            categoryId = Guid.NewGuid(),
+            description = "Fuga de agua debajo del lavaplatos",
+            location = new { latitude = 4.5794, longitude = -74.2168 },
+            addressText = "Calle 13 # 7-20, Soacha",
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("https://quickpatch.internal/problems/ubicacion-fuera-de-cobertura", (await Json(response)).GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task Crear_SoloConDireccionFueraDeLasLocalidades_RechazaIgualQueLaVistaPrevia()
+    {
+        // SCRUM-636: la misma dirección que la vista previa rechaza tampoco crea la solicitud.
+        env.Nominatim.Places["Vereda El Salitre, La Calera"] = (4.72, -73.98, "La Calera, Cundinamarca, Colombia");
+        using var http = As(Guid.NewGuid());
+
+        using var response = await http.PostAsJsonAsync(new Uri("/v1/service-requests", UriKind.Relative), new
+        {
+            categoryId = Guid.NewGuid(),
+            description = "Fuga de agua debajo del lavaplatos",
+            addressText = "Vereda El Salitre, La Calera",
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("https://quickpatch.internal/problems/ubicacion-fuera-de-cobertura", (await Json(response)).GetProperty("type").GetString());
+    }
+
+    [Fact]
     public async Task VistaPrevia_NoEncontrada_Responde422DireccionNoEncontrada()
     {
         using var http = As(Guid.NewGuid());
