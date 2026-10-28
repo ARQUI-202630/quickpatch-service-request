@@ -25,7 +25,7 @@ public abstract record CreateServiceRequestResult
 {
     public sealed record Created(DomainServiceRequest ServiceRequest) : CreateServiceRequestResult;
 
-    /// <summary>RN-SR9: la ubicación está fuera del área de cobertura.</summary>
+    /// <summary>RN-SR9: la ubicación está fuera del área de cobertura o de las 20 localidades.</summary>
     public sealed record OutOfCoverage : CreateServiceRequestResult;
 
     /// <summary>RN-SR10: la categoría no existe o no está activa en el tenant.</summary>
@@ -39,6 +39,8 @@ public abstract record CreateServiceRequestResult
 /// Caso de uso de creación de solicitud (RF-07, SCRUM-27): valida, guarda la solicitud en
 /// <c>buscando_tecnico</c> y registra <c>service-request.created</c> en el Outbox en la misma transacción.
 /// Sin <c>location</c>, geocodifica <c>addressText</c> antes de abrir la transacción (contrato 1.3.0, DD 8.3.3).
+/// La cobertura (RN-SR9) es la misma de la vista previa: el rectángulo y una de las 20 localidades (SCRUM-636). El
+/// rectángulo solo no basta: incluye parte de Soacha, y una dirección de otra ciudad puede caer allí.
 /// </summary>
 public sealed class CreateServiceRequestHandler(
     ITenantUnitOfWork unitOfWork,
@@ -46,6 +48,7 @@ public sealed class CreateServiceRequestHandler(
     ICategoryReplicaRepository categories,
     IOutbox outbox,
     IGeocoder geocoder,
+    ILocalityCatalog localities,
     CoverageArea coverageArea,
     TimeProvider clock)
 {
@@ -81,7 +84,8 @@ public sealed class CreateServiceRequestHandler(
             command.CompanyId,
             command.SiteName);
 
-        if (!coverageArea.Contains(serviceRequest.Location))
+        if (!coverageArea.Contains(serviceRequest.Location)
+            || await localities.FindContainingAsync(serviceRequest.Location, cancellationToken) is null)
         {
             return new CreateServiceRequestResult.OutOfCoverage();
         }
