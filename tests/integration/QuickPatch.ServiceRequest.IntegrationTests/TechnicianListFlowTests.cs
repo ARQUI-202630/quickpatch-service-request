@@ -56,4 +56,39 @@ public class TechnicianListFlowTests(ServiceRequestEnvironment env)
         Assert.Equal(2, filtro.GetProperty("totalItems").GetInt32());
         Assert.Equal(reciente, Assert.Single(filtro.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
     }
+
+    private Task RateAsync(Guid tenant, Guid serviceRequest, Guid technician, int score) =>
+        env.ExecuteAdminAsync(
+            "INSERT INTO ratings (id, tenant_id, service_request_id, technician_id, score, comment, created_at) " +
+            $"VALUES ('{Guid.NewGuid()}', '{tenant}', '{serviceRequest}', '{technician}', {score}, 'Comentario privado', '2026-10-27T18:00:00Z');");
+
+    /// <summary>
+    /// SCRUM-100: el historial trae <c>score</c> y <c>ratedAt</c> de la tabla <c>ratings</c>, también bajo RLS. Una fila de
+    /// calificación marcada con otro tenant no aparece aunque apunte a una solicitud del técnico.
+    /// </summary>
+    [Fact]
+    public async Task Historial_TraeLaCalificacion_SoloDelTenantDelToken()
+    {
+        var tenant = Guid.NewGuid();
+        var technician = Guid.NewGuid();
+        var (calificada, ajena) = (Guid.NewGuid(), Guid.NewGuid());
+        await InsertAsync(calificada, tenant, technician, "pagado", 2);
+        await InsertAsync(ajena, tenant, technician, "pagado", 1);
+        await RateAsync(tenant, calificada, technician, 4);
+        await RateAsync(Guid.NewGuid(), ajena, technician, 1);
+
+        using var http = env.App.CreateClient();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.Create(technician, tenant, "tecnico"));
+
+        using var response = await http.GetAsync(new Uri("/v1/technicians/me/service-requests?status=pagado", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var items = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal([calificada, ajena], items.Select(x => x.GetProperty("id").GetGuid()));
+        Assert.Equal(4, items[0].GetProperty("score").GetInt32());
+        Assert.Equal(new DateTimeOffset(2026, 10, 27, 18, 0, 0, TimeSpan.Zero), items[0].GetProperty("ratedAt").GetDateTimeOffset());
+        Assert.False(items[0].TryGetProperty("comment", out _));
+        Assert.Equal(JsonValueKind.Null, items[1].GetProperty("score").ValueKind);
+        Assert.Equal(JsonValueKind.Null, items[1].GetProperty("ratedAt").ValueKind);
+    }
 }

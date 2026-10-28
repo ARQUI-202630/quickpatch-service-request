@@ -222,6 +222,18 @@ public sealed class InMemoryStore :
         }
     }
 
+    public Task<IReadOnlyDictionary<Guid, Rating>> FindByServiceRequestsAsync(
+        IReadOnlyCollection<Guid> serviceRequestIds, CancellationToken cancellationToken)
+    {
+        lock (this)
+        {
+            IReadOnlyDictionary<Guid, Rating> rows = Ratings
+                .Where(x => x.TenantId == currentTenant && serviceRequestIds.Contains(x.ServiceRequestId))
+                .ToDictionary(x => x.ServiceRequestId);
+            return Task.FromResult(rows);
+        }
+    }
+
     public Task<IReadOnlyList<ExpiredQuoteRef>> FindAsync(DateTimeOffset now, int limit, CancellationToken cancellationToken)
     {
         lock (this)

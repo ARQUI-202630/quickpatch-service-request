@@ -2,6 +2,7 @@ using QuickPatch.ServiceRequest.Api.Http;
 using QuickPatch.ServiceRequest.Api.Security;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
 using QuickPatch.ServiceRequest.Domain.Common;
+using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
@@ -72,17 +73,22 @@ public sealed record CancelServiceRequestRequest(string? Reason);
 /// <summary>Esquema <c>CancelledServiceRequest</c> (1.5.0).</summary>
 public sealed record CancelledServiceRequestResponse(Guid Id, string Status, DateTimeOffset CancelledAt, string CancelledByType);
 
-/// <summary>Esquema <c>TechnicianServiceRequest</c> (1.2.0): sin dirección, ubicación ni cliente (RN-SR13).</summary>
+/// <summary>
+/// Esquema <c>TechnicianServiceRequest</c> (1.2.0): sin dirección, ubicación ni cliente (RN-SR13). Desde 1.10.0 con
+/// <c>score</c> y <c>ratedAt</c>, null si no está calificada; el comentario no se le muestra al técnico (SCRUM-100).
+/// </summary>
 public sealed record TechnicianServiceRequestResponse(
     Guid Id,
     string Status,
     Guid CategoryId,
     string Description,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? AssignedAt)
+    DateTimeOffset? AssignedAt,
+    int? Score,
+    DateTimeOffset? RatedAt)
 {
-    public static TechnicianServiceRequestResponse From(DomainServiceRequest s) =>
-        new(s.Id, s.Status, s.CategoryId, s.Description, s.CreatedAt, s.AssignedAt);
+    public static TechnicianServiceRequestResponse From(DomainServiceRequest s, Rating? rating) =>
+        new(s.Id, s.Status, s.CategoryId, s.Description, s.CreatedAt, s.AssignedAt, rating?.Score, rating?.CreatedAt);
 }
 
 /// <summary>Esquema <c>TechnicianServiceRequestPage</c> (1.2.0).</summary>
@@ -324,7 +330,7 @@ public static class ServiceRequestEndpoints
             var result = await handler.HandleAsync(
                 new ListTechnicianServiceRequestsQuery(user.TenantId, user.UserId, status, pageNumber, pageSize), cancellationToken);
             return Results.Ok(new TechnicianServiceRequestPageResponse(
-                result.Items.Select(TechnicianServiceRequestResponse.From).ToList(), result.Page, result.Size, result.TotalItems));
+                result.Items.Select(x => TechnicianServiceRequestResponse.From(x, result.Ratings.GetValueOrDefault(x.Id))).ToList(), result.Page, result.Size, result.TotalItems));
         }
         catch (DomainValidationException ex)
         {

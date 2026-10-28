@@ -126,6 +126,9 @@ public interface IRatingRepository
     /// el índice único sobre <c>service_request_id</c> respalda la regla en la base.
     /// </summary>
     Task<bool> ExistsAsync(Guid serviceRequestId, CancellationToken cancellationToken);
+
+    /// <summary>Calificaciones de esas solicitudes en el tenant actual, por solicitud; las no calificadas no aparecen (SCRUM-100).</summary>
+    Task<IReadOnlyDictionary<Guid, Rating>> FindByServiceRequestsAsync(IReadOnlyCollection<Guid> serviceRequestIds, CancellationToken cancellationToken);
 }
 
 /// <summary>
