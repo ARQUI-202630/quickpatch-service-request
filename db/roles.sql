@@ -22,6 +22,8 @@ GRANT USAGE ON SCHEMA public TO service_request_app, service_request_outbox, ser
 
 -- Rol del servicio: todo bajo RLS.
 GRANT SELECT, INSERT, UPDATE ON service_requests, service_request_categories, quotes TO service_request_app;
+-- Réplica del estado de los tenants (SCRUM-510, RN-T1): la alimenta el consumidor de tenant.status-changed.
+GRANT SELECT, INSERT, UPDATE ON tenant_status_replica TO service_request_app;
 GRANT SELECT, INSERT ON processed_events TO service_request_app;
 -- Evidencias (DD 5.10): se insertan y se leen; no se cambian ni se borran.
 GRANT SELECT, INSERT ON service_evidence TO service_request_app;

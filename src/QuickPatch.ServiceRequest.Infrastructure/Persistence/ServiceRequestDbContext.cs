@@ -8,6 +8,7 @@ using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
+using QuickPatch.ServiceRequest.Domain.Tenants;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -19,6 +20,8 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
     public DbSet<DomainServiceRequest> ServiceRequests => Set<DomainServiceRequest>();
 
     public DbSet<CategoryReplica> Categories => Set<CategoryReplica>();
+
+    public DbSet<TenantStatusReplica> TenantStatuses => Set<TenantStatusReplica>();
 
     public DbSet<Quote> Quotes => Set<Quote>();
 
@@ -146,6 +149,15 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property(x => x.Name).HasColumnName("name").HasMaxLength(100);
             e.Property(x => x.Description).HasColumnName("description").HasMaxLength(255);
             e.Property(x => x.Active).HasColumnName("active");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        modelBuilder.Entity<TenantStatusReplica>(e =>
+        {
+            e.ToTable("tenant_status_replica");
+            e.HasKey(x => x.TenantId);
+            e.Property(x => x.TenantId).HasColumnName("tenant_id").ValueGeneratedNever();
+            e.Property(x => x.Status).HasColumnName("status").HasMaxLength(20);
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 

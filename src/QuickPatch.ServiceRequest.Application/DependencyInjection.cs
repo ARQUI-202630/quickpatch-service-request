@@ -7,6 +7,7 @@ using QuickPatch.ServiceRequest.Application.Quotes;
 using QuickPatch.ServiceRequest.Application.Ratings;
 using QuickPatch.ServiceRequest.Application.References;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
+using QuickPatch.ServiceRequest.Application.Tenants;
 
 namespace QuickPatch.ServiceRequest.Application;
 
@@ -42,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<GetTenantSummaryHandler>();
         services.AddScoped<GetPlatformSummaryHandler>();
         services.AddScoped<ApplyCategoryChangedHandler>();
+        services.AddScoped<ApplyTenantStatusChangedHandler>();
         services.AddScoped<MatchingStatusHandler>();
         services.AddScoped<QuickPatch.ServiceRequest.Application.Payments.PaymentEventsHandler>();
         return services;

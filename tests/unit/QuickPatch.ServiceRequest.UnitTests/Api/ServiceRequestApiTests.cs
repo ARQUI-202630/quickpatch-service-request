@@ -45,6 +45,7 @@ public class ApiFactoryBase : WebApplicationFactory<Program>
             services.AddSingleton<ITenantUnitOfWork>(Store);
             services.AddSingleton<IServiceRequestRepository>(Store);
             services.AddSingleton<ICategoryReplicaRepository>(Store);
+            services.AddSingleton<ITenantStatusReplicaRepository>(Store);
             services.AddSingleton<IProcessedEventRepository>(Store);
             services.AddSingleton<IOutbox>(Store);
             services.AddSingleton<IPlatformServiceRequestCounter>(Store);

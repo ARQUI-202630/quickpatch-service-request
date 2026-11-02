@@ -8,6 +8,7 @@ using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
+using QuickPatch.ServiceRequest.Domain.Tenants;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -188,6 +189,17 @@ public sealed class CategoryReplicaRepository(ServiceRequestDbContext db) : ICat
             .OrderBy(x => x.Name)
             .ThenBy(x => x.CategoryId)
             .ToListAsync(cancellationToken);
+}
+
+public sealed class TenantStatusReplicaRepository(ServiceRequestDbContext db) : ITenantStatusReplicaRepository
+{
+    public Task<bool> IsInactiveAsync(Guid tenantId, CancellationToken cancellationToken) =>
+        db.TenantStatuses.AsNoTracking().AnyAsync(x => x.TenantId == tenantId && x.Status == TenantStatusReplica.Inactive, cancellationToken);
+
+    public Task<TenantStatusReplica?> FindAsync(Guid tenantId, CancellationToken cancellationToken) =>
+        db.TenantStatuses.SingleOrDefaultAsync(x => x.TenantId == tenantId, cancellationToken);
+
+    public void Add(TenantStatusReplica tenant) => db.TenantStatuses.Add(tenant);
 }
 
 public sealed class ProcessedEventRepository(ServiceRequestDbContext db) : IProcessedEventRepository

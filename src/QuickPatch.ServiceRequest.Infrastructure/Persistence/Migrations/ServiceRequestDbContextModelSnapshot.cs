@@ -333,6 +333,27 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.ToTable("service_requests", (string)null);
                 });
 
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Tenants.TenantStatusReplica", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("tenant_status_replica", (string)null);
+                });
+
             modelBuilder.Entity("QuickPatch.ServiceRequest.Infrastructure.Persistence.AuditLogRecord", b =>
                 {
                     b.Property<Guid>("Id")

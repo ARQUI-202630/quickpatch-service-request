@@ -33,12 +33,15 @@ public abstract record CreateServiceRequestResult
 
     /// <summary>Llegó sin <c>location</c> y la dirección no se pudo geocodificar (contrato 1.3.0, ADR-024).</summary>
     public sealed record AddressNotFound : CreateServiceRequestResult;
+
+    /// <summary>RN-T1: el tenant fue desactivado y no puede crear solicitudes aunque su token siga vigente (SCRUM-510).</summary>
+    public sealed record TenantInactive : CreateServiceRequestResult;
 }
 
 /// <summary>
 /// Caso de uso de creación de solicitud (RF-07, SCRUM-27): valida, guarda la solicitud en
 /// <c>buscando_tecnico</c> y registra <c>service-request.created</c> en el Outbox en la misma transacción.
-/// Sin <c>location</c>, geocodifica <c>addressText</c> antes de abrir la transacción (contrato 1.3.0, DD 8.3.3).
+/// Rechaza el tenant desactivado (RN-T1). Sin <c>location</c>, geocodifica <c>addressText</c> antes de abrir la transacción (contrato 1.3.0, DD 8.3.3).
 /// La cobertura (RN-SR9) es la misma de la vista previa: el rectángulo y una de las 20 localidades (SCRUM-636). El
 /// rectángulo solo no basta: incluye parte de Soacha, y una dirección de otra ciudad puede caer allí.
 /// </summary>
@@ -46,6 +49,7 @@ public sealed class CreateServiceRequestHandler(
     ITenantUnitOfWork unitOfWork,
     IServiceRequestRepository serviceRequests,
     ICategoryReplicaRepository categories,
+    ITenantStatusReplicaRepository tenantStatuses,
     IOutbox outbox,
     IGeocoder geocoder,
     ILocalityCatalog localities,
@@ -94,6 +98,14 @@ public sealed class CreateServiceRequestHandler(
             command.TenantId,
             async ct =>
             {
+                // RN-T1: un tenant desactivado no crea solicitudes, sin esperar a que venza el token que ya tiene (SCRUM-348).
+                // Se consulta la réplica local del estado (ADR-017), dentro de esta misma transacción: no agrega otra a cada
+                // solicitud ni cambia que las rechazadas por ubicación no toquen la base. Un tenant sin fila cuenta como activo.
+                if (await tenantStatuses.IsInactiveAsync(command.TenantId, ct))
+                {
+                    return new CreateServiceRequestResult.TenantInactive();
+                }
+
                 if (!await categories.IsActiveAsync(command.CategoryId, ct))
                 {
                     return new CreateServiceRequestResult.CategoryUnavailable();

@@ -4,6 +4,7 @@ using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
+using QuickPatch.ServiceRequest.Domain.Tenants;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -16,7 +17,7 @@ namespace QuickPatch.ServiceRequest.UnitTests.Support;
 /// búsqueda de cotizaciones vencidas, como <c>service_request_scheduler</c>: ve todos los tenants, pero solo referencias.
 /// </summary>
 public sealed class InMemoryStore :
-    ITenantUnitOfWork, IServiceRequestRepository, ICategoryReplicaRepository, IProcessedEventRepository, IOutbox,
+    ITenantUnitOfWork, IServiceRequestRepository, ICategoryReplicaRepository, ITenantStatusReplicaRepository, IProcessedEventRepository, IOutbox,
     IPlatformServiceRequestCounter, IAuditLog, IQuoteRepository, IExpiredQuoteFinder, IEvidenceRepository, IRatingRepository
 {
     public List<AuditEntry> Audit { get; } = [];
@@ -28,6 +29,8 @@ public sealed class InMemoryStore :
     public List<DomainServiceRequest> ServiceRequests { get; } = [];
 
     public List<CategoryReplica> Categories { get; } = [];
+
+    public List<TenantStatusReplica> TenantStatuses { get; } = [];
 
     public List<(Guid EventId, Guid TenantId, string EventType)> ProcessedEvents { get; } = [];
 
@@ -135,6 +138,15 @@ public sealed class InMemoryStore :
         Task.FromResult(Categories.SingleOrDefault(x => x.TenantId == currentTenant && x.CategoryId == categoryId));
 
     public void Add(CategoryReplica category) => Categories.Add(category);
+
+    public Task<bool> IsInactiveAsync(Guid tenantId, CancellationToken cancellationToken) =>
+        Task.FromResult(TenantStatuses.Any(x => x.TenantId == currentTenant && x.TenantId == tenantId && x.IsInactive));
+
+    // Misma firma que la de categorías (distinto tipo de retorno): se implementa de forma explícita.
+    Task<TenantStatusReplica?> ITenantStatusReplicaRepository.FindAsync(Guid tenantId, CancellationToken cancellationToken) =>
+        Task.FromResult(TenantStatuses.SingleOrDefault(x => x.TenantId == currentTenant && x.TenantId == tenantId));
+
+    public void Add(TenantStatusReplica tenant) => TenantStatuses.Add(tenant);
 
     public Task<IReadOnlyList<CategoryReplica>> ListActiveAsync(CancellationToken cancellationToken)
     {

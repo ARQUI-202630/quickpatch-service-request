@@ -182,6 +182,11 @@ public static class ServiceRequestEndpoints
                 title: "La ubicación está fuera del área de cobertura",
                 detail: "El servicio opera solo en Bogotá D.C."),
             CreateServiceRequestResult.AddressNotFound => AddressNotFound(),
+            CreateServiceRequestResult.TenantInactive => Results.Problem(
+                statusCode: StatusCodes.Status422UnprocessableEntity,
+                type: Problems.TenantInactive,
+                title: "El tenant está inactivo",
+                detail: "tenant is disabled"),
             _ => Results.Problem(
                 statusCode: StatusCodes.Status422UnprocessableEntity,
                 type: Problems.CategoryUnavailable,
