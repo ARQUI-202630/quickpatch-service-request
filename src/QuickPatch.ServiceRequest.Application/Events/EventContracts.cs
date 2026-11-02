@@ -93,6 +93,9 @@ public sealed record ServiceRatedData(Guid ServiceRequestId, Guid TechnicianId, 
 /// <summary><c>data</c> de <c>catalog.category-changed</c> v1; <see cref="Description"/> es opcional desde quickpatch-kafka v0.8.0.</summary>
 public sealed record CategoryChangedData(Guid CategoryId, string Name, bool Active, DateTimeOffset UpdatedAt, string? Description = null);
 
+/// <summary><c>data</c> de <c>tenant.status-changed</c> v1 (quickpatch-kafka v0.10.0, SCRUM-508): estado completo y <c>updatedAt</c> como versión.</summary>
+public sealed record TenantStatusChangedData(Guid TenantId, string Status, DateTimeOffset UpdatedAt);
+
 /// <summary><c>data</c> de <c>matching.technician-assigned</c> v1.</summary>
 public sealed record TechnicianAssignedData(Guid ServiceRequestId, Guid ClientId, Guid AttemptId, Guid TechnicianId, DateTimeOffset AssignedAt);
 
@@ -120,6 +123,7 @@ public static class EventTypes
     public const string ServiceCompleted = "service-request.completed";
     public const string ServiceRated = "service-request.rated";
     public const string CategoryChanged = "catalog.category-changed";
+    public const string TenantStatusChanged = "tenant.status-changed";
     public const string TechnicianAssigned = "matching.technician-assigned";
     public const string NoTechnicianAvailable = "matching.no-technician-available";
     public const string SearchResumed = "matching.search-resumed";

@@ -3,6 +3,7 @@ using QuickPatch.ServiceRequest.Domain.Evidence;
 using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
+using QuickPatch.ServiceRequest.Domain.Tenants;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -181,6 +182,17 @@ public interface ICategoryReplicaRepository
     Task<IReadOnlyList<CategoryReplica>> ListActiveAsync(CancellationToken cancellationToken);
 
     void Add(CategoryReplica category);
+}
+
+/// <summary>Réplica local del estado de los tenants (tabla <c>tenant_status_replica</c>, RN-T1, ADR-017).</summary>
+public interface ITenantStatusReplicaRepository
+{
+    /// <summary>Si la réplica dice que el tenant está inactivo. Un tenant sin fila cuenta como activo.</summary>
+    Task<bool> IsInactiveAsync(Guid tenantId, CancellationToken cancellationToken);
+
+    Task<TenantStatusReplica?> FindAsync(Guid tenantId, CancellationToken cancellationToken);
+
+    void Add(TenantStatusReplica tenant);
 }
 
 /// <summary>Registro de eventos ya aplicados (tabla <c>processed_events</c>, RN-EV1).</summary>

@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantUnitOfWork, TenantUnitOfWork>();
         services.AddScoped<IServiceRequestRepository, ServiceRequestRepository>();
         services.AddScoped<ICategoryReplicaRepository, CategoryReplicaRepository>();
+        services.AddScoped<ITenantStatusReplicaRepository, TenantStatusReplicaRepository>();
         services.AddScoped<ILocalityCatalog, LocalityCatalog>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<IOutbox, EfOutbox>();
@@ -169,6 +170,19 @@ public static class DependencyInjection
                 }).Build(),
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MatchingEventsConsumer>>()));
             services.AddHostedService(sp => sp.GetRequiredService<MatchingEventsConsumer>());
+
+            // Consumidor del estado de los tenants (SCRUM-510, RN-T1): un IConsumer propio, como los demás.
+            services.AddSingleton(sp => new TenantStatusChangedConsumer(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                new ConsumerBuilder<string, string>(new ConsumerConfig
+                {
+                    BootstrapServers = kafka.BootstrapServers,
+                    GroupId = kafka.ConsumerGroupId,
+                    EnableAutoCommit = false,
+                    AutoOffsetReset = AutoOffsetReset.Earliest,
+                }).Build(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TenantStatusChangedConsumer>>()));
+            services.AddHostedService(sp => sp.GetRequiredService<TenantStatusChangedConsumer>());
 
             // Consumidor de los eventos de Payments (SCRUM-115): pasa la solicitud a pagado con payment.approved.
             services.AddSingleton(sp => new PaymentEventsConsumer(

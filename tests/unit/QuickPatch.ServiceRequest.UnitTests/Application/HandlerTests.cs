@@ -25,7 +25,7 @@ public class CreateServiceRequestHandlerTests
     private readonly FakeLocalityCatalog localities = new();
 
     private CreateServiceRequestHandler Handler() =>
-        new(store, store, store, store, geocoder, localities, CoverageArea.Bogota, new FixedClock(Now));
+        new(store, store, store, store, store, geocoder, localities, CoverageArea.Bogota, new FixedClock(Now));
 
     private CreateServiceRequestCommand CommandWithoutLocation() => Command() with { Location = null };
 
