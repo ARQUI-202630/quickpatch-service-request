@@ -64,7 +64,7 @@ public sealed partial class MatchingEventsConsumer(
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
         }
         finally
@@ -105,7 +105,9 @@ public sealed partial class MatchingEventsConsumer(
             LogInvalidMessage(logger, ex);
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // Solo es un apagado si el token está cancelado. Un tiempo de espera con forma de cancelación (la base o un servicio que no
+        // responde) es un fallo del mensaje: devuelve false para reintentarlo, en vez de subir hasta el bucle y terminarlo.
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             LogProcessingFailed(logger, envelope.EventId, ex);
             return false;
