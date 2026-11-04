@@ -205,7 +205,7 @@ public class CreateServiceRequestHandlerTests
     {
         store.Categories.Add(new CategoryReplica(category, tenant, "Plomería", true, Now));
         var created = (CreateServiceRequestResult.Created)await Handler().HandleAsync(Command(), CancellationToken.None);
-        var get = new GetServiceRequestHandler(store, store, new FakeUserDirectory());
+        var get = new GetServiceRequestHandler(store, store, new FakeUserDirectory(), store);
         var id = created.ServiceRequest.Id;
 
         ServiceRequestViewer Viewer(Guid t, Guid user) => new(user, t, "cliente", "token", correlation);
