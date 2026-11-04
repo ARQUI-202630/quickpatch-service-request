@@ -19,6 +19,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     // El contrato declara additionalProperties: false; un campo desconocido es un error de validación (400).
     options.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+    // Los valores por defecto web leen números escritos como texto ("5"); el contrato pide integer y number (CAL-006).
+    options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
 });
 builder.Services.AddHealthChecks();
 builder.Services.AddQuickPatchAuthentication(builder.Configuration);
