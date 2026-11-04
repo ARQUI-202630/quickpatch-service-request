@@ -38,7 +38,9 @@ public sealed partial class OutboxPublisher(
                     continue;
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            // Solo es un apagado si el token del servicio está cancelado; un tiempo de espera con forma de cancelación se reintenta
+            // en la siguiente vuelta en vez de apagar el host.
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 LogPublishFailed(logger, ex);
             }

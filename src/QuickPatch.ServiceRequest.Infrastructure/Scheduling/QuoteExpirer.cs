@@ -33,7 +33,10 @@ public sealed partial class QuoteExpirer(
             {
                 await RunOnceAsync(stoppingToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            // Solo es un apagado si el token del servicio está cancelado. Un TaskCanceledException sin cancelación (el tiempo de espera de
+            // Redis o de la base) es un fallo de la vuelta: se registra y se reintenta. Si se deja subir, el BackgroundService falla y
+            // el host se apaga entero (HostOptions.BackgroundServiceExceptionBehavior = StopHost).
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 LogExpiryFailed(logger, ex);
             }
