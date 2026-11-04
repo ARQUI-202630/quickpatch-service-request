@@ -150,6 +150,21 @@ public class RatingApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.True((await Json(response)).GetProperty("errors").TryGetProperty("score", out _));
     }
 
+    [Theory]
+    [InlineData("""{"score":"5"}""")]
+    [InlineData("""{"score":4.5}""")]
+    public async Task PuntajeQueNoEsEntero_400(string body)
+    {
+        var (tenant, client) = (Guid.NewGuid(), Guid.NewGuid());
+        var request = Seed(tenant, client, ServiceRequestStatus.Pagado);
+        using var http = As(client, tenant, "cliente");
+
+        using var response = await http.PostAsync(RatingUri(request.Id), new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
     [Fact]
     public async Task SinToken_401()
     {
