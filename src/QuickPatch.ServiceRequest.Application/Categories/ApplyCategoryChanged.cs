@@ -49,11 +49,11 @@ public sealed partial class ApplyCategoryChangedHandler(
                 var existing = await categories.FindAsync(data.CategoryId, ct);
                 if (existing is null)
                 {
-                    categories.Add(new CategoryReplica(data.CategoryId, envelope.TenantId, data.Name, data.Active, data.UpdatedAt));
+                    categories.Add(new CategoryReplica(data.CategoryId, envelope.TenantId, data.Name, data.Active, data.UpdatedAt, data.Description));
                     return CategoryChangeOutcome.Applied;
                 }
 
-                return existing.ApplyChange(data.Name, data.Active, data.UpdatedAt)
+                return existing.ApplyChange(data.Name, data.Active, data.UpdatedAt, data.Description)
                     ? CategoryChangeOutcome.Applied
                     : CategoryChangeOutcome.Stale;
             },

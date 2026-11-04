@@ -145,6 +145,22 @@ public class ServiceRequestFlowTests(ServiceRequestEnvironment env)
     }
 
     [Fact]
+    public async Task Rls_HabilitadoYForzadoEnCadaTablaConTenant()
+    {
+        // DD 10.1: toda tabla con tenant_id tiene RLS habilitado y forzado.
+        var sinRls = await env.ScalarAdminAsync<string>("""
+            SELECT coalesce(string_agg(c.relname, ', ' ORDER BY c.relname), '')
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+            WHERE c.relkind = 'r'
+              AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped)
+              AND NOT (c.relrowsecurity AND c.relforcerowsecurity)
+            """);
+
+        Assert.Equal(string.Empty, sinRls);
+    }
+
+    [Fact]
     public async Task Rls_ElRolDelServicioSoloVeYEscribeEnSuTenant()
     {
         var tenantA = Guid.NewGuid();

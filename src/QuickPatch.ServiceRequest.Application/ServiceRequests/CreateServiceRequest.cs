@@ -7,7 +7,8 @@ using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.Se
 namespace QuickPatch.ServiceRequest.Application.ServiceRequests;
 
 /// <summary>
-/// Datos para crear una solicitud. <see cref="TenantId"/> y <see cref="ClientId"/> vienen del JWT, nunca del cuerpo.
+/// Datos para crear una solicitud. <see cref="TenantId"/>, <see cref="ClientId"/> y <see cref="CompanyId"/> vienen del JWT,
+/// nunca del cuerpo (RN-SR12): con empresa, la solicitud es de empresa y admite <see cref="SiteName"/> (contrato 1.9.0).
 /// </summary>
 public sealed record CreateServiceRequestCommand(
     Guid TenantId,
@@ -16,28 +17,42 @@ public sealed record CreateServiceRequestCommand(
     Guid CategoryId,
     string? Description,
     GeoPoint? Location,
-    string? AddressText);
+    string? AddressText,
+    Guid? CompanyId = null,
+    string? SiteName = null);
 
 public abstract record CreateServiceRequestResult
 {
     public sealed record Created(DomainServiceRequest ServiceRequest) : CreateServiceRequestResult;
 
-    /// <summary>RN-SR9: la ubicación está fuera del área de cobertura.</summary>
+    /// <summary>RN-SR9: la ubicación está fuera del área de cobertura o de las 20 localidades.</summary>
     public sealed record OutOfCoverage : CreateServiceRequestResult;
 
     /// <summary>RN-SR10: la categoría no existe o no está activa en el tenant.</summary>
     public sealed record CategoryUnavailable : CreateServiceRequestResult;
+
+    /// <summary>Llegó sin <c>location</c> y la dirección no se pudo geocodificar (contrato 1.3.0, ADR-024).</summary>
+    public sealed record AddressNotFound : CreateServiceRequestResult;
+
+    /// <summary>RN-T1: el tenant fue desactivado y no puede crear solicitudes aunque su token siga vigente (SCRUM-510).</summary>
+    public sealed record TenantInactive : CreateServiceRequestResult;
 }
 
 /// <summary>
 /// Caso de uso de creación de solicitud (RF-07, SCRUM-27): valida, guarda la solicitud en
 /// <c>buscando_tecnico</c> y registra <c>service-request.created</c> en el Outbox en la misma transacción.
+/// Rechaza el tenant desactivado (RN-T1). Sin <c>location</c>, geocodifica <c>addressText</c> antes de abrir la transacción (contrato 1.3.0, DD 8.3.3).
+/// La cobertura (RN-SR9) es la misma de la vista previa: el rectángulo y una de las 20 localidades (SCRUM-636). El
+/// rectángulo solo no basta: incluye parte de Soacha, y una dirección de otra ciudad puede caer allí.
 /// </summary>
 public sealed class CreateServiceRequestHandler(
     ITenantUnitOfWork unitOfWork,
     IServiceRequestRepository serviceRequests,
     ICategoryReplicaRepository categories,
+    ITenantStatusReplicaRepository tenantStatuses,
     IOutbox outbox,
+    IGeocoder geocoder,
+    ILocalityCatalog localities,
     CoverageArea coverageArea,
     TimeProvider clock)
 {
@@ -46,17 +61,35 @@ public sealed class CreateServiceRequestHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        var location = command.Location;
+        if (location is null)
+        {
+            // Primero el resto de los campos: no se geocodifica una solicitud que de todas formas se rechazaría.
+            DomainServiceRequest.ValidateFieldsWithoutLocation(
+                command.TenantId, command.ClientId, command.CategoryId, command.Description, command.AddressText, command.CompanyId, command.SiteName);
+            var geocoded = await geocoder.GeocodeAsync(command.AddressText!.Trim(), cancellationToken);
+            if (geocoded is null)
+            {
+                return new CreateServiceRequestResult.AddressNotFound();
+            }
+
+            location = geocoded.Location;
+        }
+
         var now = clock.GetUtcNow();
         var serviceRequest = DomainServiceRequest.Create(
             command.TenantId,
             command.ClientId,
             command.CategoryId,
             command.Description,
-            command.Location,
+            location,
             command.AddressText,
-            now);
+            now,
+            command.CompanyId,
+            command.SiteName);
 
-        if (!coverageArea.Contains(serviceRequest.Location))
+        if (!coverageArea.Contains(serviceRequest.Location)
+            || await localities.FindContainingAsync(serviceRequest.Location, cancellationToken) is null)
         {
             return new CreateServiceRequestResult.OutOfCoverage();
         }
@@ -65,6 +98,14 @@ public sealed class CreateServiceRequestHandler(
             command.TenantId,
             async ct =>
             {
+                // RN-T1: un tenant desactivado no crea solicitudes, sin esperar a que venza el token que ya tiene (SCRUM-348).
+                // Se consulta la réplica local del estado (ADR-017), dentro de esta misma transacción: no agrega otra a cada
+                // solicitud ni cambia que las rechazadas por ubicación no toquen la base. Un tenant sin fila cuenta como activo.
+                if (await tenantStatuses.IsInactiveAsync(command.TenantId, ct))
+                {
+                    return new CreateServiceRequestResult.TenantInactive();
+                }
+
                 if (!await categories.IsActiveAsync(command.CategoryId, ct))
                 {
                     return new CreateServiceRequestResult.CategoryUnavailable();

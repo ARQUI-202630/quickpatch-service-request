@@ -15,7 +15,7 @@ public static class TestTokens
 
     public static string PublicKeyPem { get; } = Key.ExportSubjectPublicKeyInfoPem();
 
-    public static string Create(Guid userId, Guid tenantId, string role, DateTimeOffset? expires = null)
+    public static string Create(Guid userId, Guid tenantId, string role, DateTimeOffset? expires = null, Guid? companyId = null)
     {
         var claims = new Dictionary<string, object>
         {
@@ -23,6 +23,11 @@ public static class TestTokens
             ["tenant_id"] = tenantId.ToString(),
             ["role"] = role,
         };
+        if (companyId is { } company)
+        {
+            // Identity lo agrega al token del empresa_contacto (identity 1.8.0).
+            claims["company_id"] = company.ToString();
+        }
 
         return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {

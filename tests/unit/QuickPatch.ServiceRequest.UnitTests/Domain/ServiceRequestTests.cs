@@ -70,6 +70,24 @@ public class ServiceRequestTests
     }
 
     [Fact]
+    public void ValidarSinUbicacion_NoExigeUbicacionPeroSiLoDemas()
+    {
+        DomainServiceRequest.ValidateFieldsWithoutLocation(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Fuga de agua en la cocina", "Calle 63 # 9-45");
+
+        var ex = Assert.Throws<DomainValidationException>(() =>
+            DomainServiceRequest.ValidateFieldsWithoutLocation(Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), "corta", "abc"));
+        Assert.Equal(["addressText", "description", "tenantId"], ex.Errors.Keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void ValidarDireccion_DevuelveLaDireccionSinEspacios()
+    {
+        Assert.Equal("Calle 63 # 9-45", DomainServiceRequest.ValidateAddress("  Calle 63 # 9-45 "));
+        Assert.Throws<DomainValidationException>(() => DomainServiceRequest.ValidateAddress(new string('x', 256)));
+    }
+
+    [Fact]
     public void Restore_ConservaEstadoYTecnico()
     {
         var technician = Guid.NewGuid();
@@ -134,6 +152,17 @@ public class CategoryReplicaTests
     }
 
     [Fact]
+    public void ApplyChange_GuardaLaDescripcionDelEvento()
+    {
+        var category = new CategoryReplica(Guid.NewGuid(), Guid.NewGuid(), "Plomería", true, T0);
+
+        Assert.True(category.ApplyChange("Plomería", true, T0.AddMinutes(1), "Fugas y tuberías."));
+        Assert.Equal("Fugas y tuberías.", category.Description);
+        Assert.False(category.ApplyChange("Plomería", true, T0.AddMinutes(1), "Otra"));
+        Assert.Equal("Fugas y tuberías.", category.Description);
+    }
+
+    [Fact]
     public void ApplyChange_AtrasadoOIgual_SeDescarta()
     {
         var category = new CategoryReplica(Guid.NewGuid(), Guid.NewGuid(), "Plomería", true, T0);
@@ -142,5 +171,38 @@ public class CategoryReplicaTests
         Assert.False(category.ApplyChange("Viejo", false, T0.AddMinutes(-5)));
         Assert.Equal("Plomería", category.Name);
         Assert.True(category.Active);
+    }
+
+    private static readonly DateTimeOffset MatchingNow = new(2026, 10, 13, 10, 0, 0, TimeSpan.Zero);
+    private static readonly GeoPoint MatchingPoint = new(4.6486, -74.063);
+
+    [Fact]
+    public void EventosDeMatching_SiguenLaMaquinaDeEstadosYDescartanLosViejos()
+    {
+        var request = DomainServiceRequest.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Fuga de agua en la cocina", MatchingPoint, "Calle 63 # 9-45", MatchingNow);
+
+        Assert.Equal(MatchingEventOutcome.Ignored, request.ApplySearchResumed(MatchingNow.AddSeconds(1)));
+        Assert.Equal(ServiceRequestStatus.BuscandoTecnico, request.Status);
+
+        Assert.Equal(MatchingEventOutcome.Applied, request.ApplyNoTechnicianAvailable(MatchingNow.AddSeconds(2)));
+        Assert.Equal(ServiceRequestStatus.EnEspera, request.Status);
+
+        Assert.Equal(MatchingEventOutcome.Stale, request.ApplySearchResumed(MatchingNow.AddSeconds(2)));
+        Assert.Equal(ServiceRequestStatus.EnEspera, request.Status);
+
+        Assert.Equal(MatchingEventOutcome.Applied, request.ApplySearchResumed(MatchingNow.AddSeconds(3)));
+        Assert.Equal(ServiceRequestStatus.BuscandoTecnico, request.Status);
+        Assert.Equal(MatchingNow.AddSeconds(3), request.MatchingUpdatedAt);
+    }
+
+    [Fact]
+    public void SolicitudCancelada_NoVuelveAEsperaNiABuscar()
+    {
+        var request = DomainServiceRequest.Restore(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null,
+            "Fuga de agua en la cocina", MatchingPoint, "Calle 63 # 9-45", ServiceRequestStatus.Cancelado, MatchingNow);
+
+        Assert.Equal(MatchingEventOutcome.Ignored, request.ApplyNoTechnicianAvailable(MatchingNow.AddSeconds(1)));
+        Assert.Equal(MatchingEventOutcome.Ignored, request.ApplySearchResumed(MatchingNow.AddSeconds(2)));
+        Assert.Equal(ServiceRequestStatus.Cancelado, request.Status);
     }
 }

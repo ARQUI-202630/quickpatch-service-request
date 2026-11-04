@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Application.Categories;
 using QuickPatch.ServiceRequest.Application.Events;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
@@ -20,9 +21,13 @@ public class CreateServiceRequestHandlerTests
     private readonly Guid client = Guid.NewGuid();
     private readonly Guid category = Guid.NewGuid();
     private readonly Guid correlation = Guid.NewGuid();
+    private readonly FakeGeocoder geocoder = new();
+    private readonly FakeLocalityCatalog localities = new();
 
     private CreateServiceRequestHandler Handler() =>
-        new(store, store, store, store, CoverageArea.Bogota, new FixedClock(Now));
+        new(store, store, store, store, store, geocoder, localities, CoverageArea.Bogota, new FixedClock(Now));
+
+    private CreateServiceRequestCommand CommandWithoutLocation() => Command() with { Location = null };
 
     private CreateServiceRequestCommand Command(GeoPoint? location = null, Guid? categoryId = null) =>
         new(tenant, client, correlation, categoryId ?? category, "Fuga de agua en la cocina", location ?? new GeoPoint(4.6486, -74.063), "Calle 63 # 9-45, apto 502");
@@ -72,6 +77,34 @@ public class CreateServiceRequestHandlerTests
     }
 
     [Fact]
+    public async Task Handle_DentroDelRectanguloPeroFueraDeLasLocalidades_NoAbreTransaccion()
+    {
+        // SCRUM-636: un GPS en Soacha (4,5794; -74,2168) cae en el rectángulo de RN-SR9 pero en ninguna localidad.
+        store.Categories.Add(new CategoryReplica(category, tenant, "Plomería", true, Now));
+        localities.Result = null;
+
+        var result = await Handler().HandleAsync(Command(new GeoPoint(4.5794, -74.2168)), CancellationToken.None);
+
+        Assert.IsType<CreateServiceRequestResult.OutOfCoverage>(result);
+        Assert.Equal(0, store.Transactions);
+        Assert.Empty(store.ServiceRequests);
+        Assert.Empty(store.Outbox);
+    }
+
+    [Fact]
+    public async Task Handle_SinUbicacionYPuntoFueraDeLasLocalidades_RechazaIgualQueLaVistaPrevia()
+    {
+        // SCRUM-636: una dirección de Cali que el geocodificador ubica en Soacha da 422 en la vista previa; al crear, también.
+        geocoder.Result = new GeocodedAddress(new GeoPoint(4.5794, -74.2168), "Soacha");
+        localities.Result = null;
+
+        var result = await Handler().HandleAsync(CommandWithoutLocation(), CancellationToken.None);
+
+        Assert.IsType<CreateServiceRequestResult.OutOfCoverage>(result);
+        Assert.Equal(0, store.Transactions);
+    }
+
+    [Fact]
     public async Task Handle_CategoriaInactiva_NoGuarda()
     {
         store.Categories.Add(new CategoryReplica(category, tenant, "Plomería", false, Now));
@@ -103,6 +136,65 @@ public class CreateServiceRequestHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ConUbicacion_NoGeocodifica()
+    {
+        store.Categories.Add(new CategoryReplica(category, tenant, "Plomería", true, Now));
+
+        await Handler().HandleAsync(Command(), CancellationToken.None);
+
+        Assert.Empty(geocoder.Calls);
+    }
+
+    [Fact]
+    public async Task Handle_SinUbicacion_GuardaElPuntoGeocodificado()
+    {
+        store.Categories.Add(new CategoryReplica(category, tenant, "Plomería", true, Now));
+        geocoder.Result = new GeocodedAddress(new GeoPoint(4.65, -74.06), "Calle 63, Chapinero, Bogotá");
+
+        var result = await Handler().HandleAsync(CommandWithoutLocation(), CancellationToken.None);
+
+        var created = Assert.IsType<CreateServiceRequestResult.Created>(result);
+        Assert.Equal(new GeoPoint(4.65, -74.06), created.ServiceRequest.Location);
+        Assert.Equal("Calle 63 # 9-45, apto 502", Assert.Single(geocoder.Calls));
+        using var json = JsonDocument.Parse(Assert.Single(store.Outbox).Payload);
+        Assert.Equal(4.65, json.RootElement.GetProperty("data").GetProperty("location").GetProperty("latitude").GetDouble());
+    }
+
+    [Fact]
+    public async Task Handle_SinUbicacionYDireccionNoEncontrada_NoAbreTransaccion()
+    {
+        geocoder.Result = null;
+
+        var result = await Handler().HandleAsync(CommandWithoutLocation(), CancellationToken.None);
+
+        Assert.IsType<CreateServiceRequestResult.AddressNotFound>(result);
+        Assert.Equal(0, store.Transactions);
+        Assert.Empty(store.ServiceRequests);
+    }
+
+    [Fact]
+    public async Task Handle_SinUbicacionYPuntoFueraDeBogota_FueraDeCobertura()
+    {
+        geocoder.Result = new GeocodedAddress(new GeoPoint(6.2442, -75.5812), "Medellín");
+
+        var result = await Handler().HandleAsync(CommandWithoutLocation(), CancellationToken.None);
+
+        Assert.IsType<CreateServiceRequestResult.OutOfCoverage>(result);
+        Assert.Equal(0, store.Transactions);
+    }
+
+    [Fact]
+    public async Task Handle_SinUbicacionYDatosInvalidos_ValidaSinGeocodificar()
+    {
+        var command = CommandWithoutLocation() with { Description = "corta" };
+
+        var ex = await Assert.ThrowsAsync<DomainValidationException>(() => Handler().HandleAsync(command, CancellationToken.None));
+
+        Assert.Equal(["description"], ex.Errors.Keys);
+        Assert.Empty(geocoder.Calls);
+    }
+
+    [Fact]
     public async Task Handle_SinComando_LanzaExcepcion()
     {
         await Assert.ThrowsAsync<ArgumentNullException>(() => Handler().HandleAsync(null!, CancellationToken.None));
@@ -113,12 +205,14 @@ public class CreateServiceRequestHandlerTests
     {
         store.Categories.Add(new CategoryReplica(category, tenant, "Plomería", true, Now));
         var created = (CreateServiceRequestResult.Created)await Handler().HandleAsync(Command(), CancellationToken.None);
-        var get = new GetServiceRequestHandler(store, store);
+        var get = new GetServiceRequestHandler(store, store, new FakeUserDirectory());
         var id = created.ServiceRequest.Id;
 
-        Assert.NotNull(await get.HandleAsync(tenant, client, id, CancellationToken.None));
-        Assert.Null(await get.HandleAsync(Guid.NewGuid(), client, id, CancellationToken.None));
-        Assert.Null(await get.HandleAsync(tenant, Guid.NewGuid(), id, CancellationToken.None));
+        ServiceRequestViewer Viewer(Guid t, Guid user) => new(user, t, "cliente", "token", correlation);
+
+        Assert.IsType<GetServiceRequestResult.Found>(await get.HandleAsync(Viewer(tenant, client), id, CancellationToken.None));
+        Assert.IsType<GetServiceRequestResult.NotFound>(await get.HandleAsync(Viewer(Guid.NewGuid(), client), id, CancellationToken.None));
+        Assert.IsType<GetServiceRequestResult.NotFound>(await get.HandleAsync(Viewer(tenant, Guid.NewGuid()), id, CancellationToken.None));
     }
 }
 

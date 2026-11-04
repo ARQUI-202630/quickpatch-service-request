@@ -1,3 +1,5 @@
+using Amazon.S3;
+
 using Confluent.Kafka;
 
 using Microsoft.EntityFrameworkCore;
@@ -6,15 +8,22 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 using QuickPatch.ServiceRequest.Application.Abstractions;
+using QuickPatch.ServiceRequest.Application.Quotes;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
+using QuickPatch.ServiceRequest.Infrastructure.Geocoding;
+using QuickPatch.ServiceRequest.Infrastructure.Identity;
 using QuickPatch.ServiceRequest.Infrastructure.Messaging;
 using QuickPatch.ServiceRequest.Infrastructure.Options;
 using QuickPatch.ServiceRequest.Infrastructure.Persistence;
+using QuickPatch.ServiceRequest.Infrastructure.Scheduling;
+using QuickPatch.ServiceRequest.Infrastructure.Storage;
+
+using StackExchange.Redis;
 
 namespace QuickPatch.ServiceRequest.Infrastructure;
 
 /// <summary>
-/// Capa de infraestructura: PostgreSQL + PostGIS (EF Core), Kafka y adaptadores externos (SDD 6.3).
+/// Capa de infraestructura: PostgreSQL + PostGIS (EF Core), Kafka, Redis, Garage y adaptadores externos (SDD 6.3).
 /// Implementa las interfaces que definen Application y Domain.
 /// </summary>
 public static class DependencyInjection
@@ -30,6 +39,35 @@ public static class DependencyInjection
         services.Configure<CoverageOptions>(configuration.GetSection(CoverageOptions.Section));
         services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.Section));
         services.Configure<OutboxOptions>(configuration.GetSection(OutboxOptions.Section));
+        services.Configure<PlatformOptions>(configuration.GetSection(PlatformOptions.Section));
+        services.Configure<QuotesOptions>(configuration.GetSection(QuotesOptions.Section));
+        services.AddSingleton(sp => new QuoteSettings(sp.GetRequiredService<IOptions<QuotesOptions>>().Value.Ttl));
+
+        // Consulta interna por lote a Identity (identity-internal.v1.yaml, DD V4 8.3.4).
+        var identity = configuration.GetSection(IdentityOptions.Section).Get<IdentityOptions>() ?? new IdentityOptions();
+        services.AddHttpClient<IUserDirectory, IdentityUserDirectory>(http =>
+        {
+            if (!string.IsNullOrWhiteSpace(identity.BaseUrl))
+            {
+                http.BaseAddress = new Uri(identity.BaseUrl.TrimEnd('/') + "/");
+            }
+
+            http.Timeout = identity.Timeout;
+        });
+
+        // Nominatim propio de la VM de datos (ADR-024, DD 8.3.3); la espera total la controla el geocodificador.
+        var geocoding = configuration.GetSection(GeocodingOptions.Section).Get<GeocodingOptions>() ?? new GeocodingOptions();
+        services.AddSingleton(geocoding);
+        services.AddHttpClient<IGeocoder, NominatimGeocoder>(http =>
+        {
+            if (!string.IsNullOrWhiteSpace(geocoding.NominatimUrl))
+            {
+                http.BaseAddress = new Uri(geocoding.NominatimUrl.TrimEnd('/') + "/");
+            }
+
+            http.Timeout = geocoding.Timeout + TimeSpan.FromSeconds(1);
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("quickpatch-service-request");
+        });
 
         services.AddSingleton(sp =>
         {
@@ -45,8 +83,55 @@ public static class DependencyInjection
         services.AddScoped<ITenantUnitOfWork, TenantUnitOfWork>();
         services.AddScoped<IServiceRequestRepository, ServiceRequestRepository>();
         services.AddScoped<ICategoryReplicaRepository, CategoryReplicaRepository>();
+        services.AddScoped<ITenantStatusReplicaRepository, TenantStatusReplicaRepository>();
+        services.AddScoped<ILocalityCatalog, LocalityCatalog>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<IOutbox, EfOutbox>();
+        services.AddScoped<IAuditLog, EfAuditLog>();
+        services.AddScoped<IPlatformServiceRequestCounter, PlatformServiceRequestCounter>();
+        services.AddScoped<IQuoteRepository, QuoteRepository>();
+        services.AddScoped<IExpiredQuoteFinder, ExpiredQuoteFinder>();
+        services.AddScoped<IEvidenceRepository, EvidenceRepository>();
+        services.AddScoped<IRatingRepository, RatingRepository>();
+
+        // Fotos de evidencia en Garage (RN-E3, ADR-016).
+        var evidence = configuration.GetSection(EvidenceStorageOptions.Section).Get<EvidenceStorageOptions>() ?? new EvidenceStorageOptions();
+        if (evidence.Enabled)
+        {
+            services.AddSingleton(evidence);
+            services.AddSingleton<IAmazonS3>(_ => GarageEvidenceStorage.CreateClient(evidence));
+            services.AddSingleton<IEvidenceStorage, GarageEvidenceStorage>();
+        }
+        else
+        {
+            services.AddSingleton<IEvidenceStorage, UnconfiguredEvidenceStorage>();
+        }
+
+        // Coordinación del vencimiento de cotizaciones en Redis (RN-Q6, DD 7.13), con el usuario ACL del servicio.
+        var redis = configuration.GetSection(RedisOptions.Section).Get<RedisOptions>() ?? new RedisOptions();
+        if (redis.Enabled)
+        {
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
+            {
+                var config = new ConfigurationOptions
+                {
+                    User = string.IsNullOrWhiteSpace(redis.User) ? null : redis.User,
+                    Password = string.IsNullOrWhiteSpace(redis.Password) ? null : redis.Password,
+                    AbortOnConnectFail = false,
+                    ClientName = "service-request",
+                };
+                config.EndPoints.Add(redis.Endpoint);
+                return ConnectionMultiplexer.Connect(config);
+            });
+            services.AddSingleton<IDistributedLock, RedisDistributedLock>();
+        }
+        else
+        {
+            services.AddSingleton<IDistributedLock, InProcessLock>();
+        }
+
+        services.AddSingleton<QuoteExpirer>();
+        services.AddHostedService(sp => sp.GetRequiredService<QuoteExpirer>());
 
         services.AddHealthChecks().AddDbContextCheck<ServiceRequestDbContext>("postgresql", tags: [ReadyTag]);
 
@@ -72,6 +157,45 @@ public static class DependencyInjection
             services.AddHostedService(sp => sp.GetRequiredService<OutboxPublisher>());
             services.AddSingleton<CategoryChangedConsumer>();
             services.AddHostedService(sp => sp.GetRequiredService<CategoryChangedConsumer>());
+
+            // Consumidor propio: un IConsumer solo puede tener una suscripción activa.
+            services.AddSingleton(sp => new MatchingEventsConsumer(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                new ConsumerBuilder<string, string>(new ConsumerConfig
+                {
+                    BootstrapServers = kafka.BootstrapServers,
+                    GroupId = kafka.ConsumerGroupId,
+                    EnableAutoCommit = false,
+                    AutoOffsetReset = AutoOffsetReset.Earliest,
+                }).Build(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MatchingEventsConsumer>>()));
+            services.AddHostedService(sp => sp.GetRequiredService<MatchingEventsConsumer>());
+
+            // Consumidor del estado de los tenants (SCRUM-510, RN-T1): un IConsumer propio, como los demás.
+            services.AddSingleton(sp => new TenantStatusChangedConsumer(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                new ConsumerBuilder<string, string>(new ConsumerConfig
+                {
+                    BootstrapServers = kafka.BootstrapServers,
+                    GroupId = kafka.ConsumerGroupId,
+                    EnableAutoCommit = false,
+                    AutoOffsetReset = AutoOffsetReset.Earliest,
+                }).Build(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<TenantStatusChangedConsumer>>()));
+            services.AddHostedService(sp => sp.GetRequiredService<TenantStatusChangedConsumer>());
+
+            // Consumidor de los eventos de Payments (SCRUM-115): pasa la solicitud a pagado con payment.approved.
+            services.AddSingleton(sp => new PaymentEventsConsumer(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                new ConsumerBuilder<string, string>(new ConsumerConfig
+                {
+                    BootstrapServers = kafka.BootstrapServers,
+                    GroupId = kafka.ConsumerGroupId,
+                    EnableAutoCommit = false,
+                    AutoOffsetReset = AutoOffsetReset.Earliest,
+                }).Build(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PaymentEventsConsumer>>()));
+            services.AddHostedService(sp => sp.GetRequiredService<PaymentEventsConsumer>());
         }
 
         return services;

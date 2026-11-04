@@ -41,3 +41,82 @@ public sealed class OutboxOptions
 
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
 }
+
+/// <summary>Vista de plataforma del panel operativo (DD 10.4, DEP-15). Sección <c>Platform</c>.</summary>
+public sealed class PlatformOptions
+{
+    public const string Section = "Platform";
+
+    /// <summary>
+    /// Rol <c>service_request_platform</c> (DD 10.2) que se adopta con <c>SET LOCAL ROLE</c> para contar las solicitudes de
+    /// todos los tenants. Vacío solo en desarrollo local: sin el rol, RLS no deja ver nada y los conteos salen vacíos.
+    /// </summary>
+    public string ReadRole { get; set; } = string.Empty;
+}
+
+/// <summary>Cotizaciones (RN-Q6, RN-Q8). Sección <c>Quotes</c>.</summary>
+public sealed class QuotesOptions
+{
+    public const string Section = "Quotes";
+
+    /// <summary><c>QUOTE_TTL</c> (RN-Q8, DEP-16): plazo del cliente para responder. QA puede usar uno corto.</summary>
+    public TimeSpan Ttl { get; set; } = TimeSpan.FromHours(24);
+
+    /// <summary>Cada cuánto se buscan cotizaciones vencidas.</summary>
+    public TimeSpan ExpiryInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Cotizaciones vencidas que se procesan por vuelta.</summary>
+    public int ExpiryBatchSize { get; set; } = 100;
+
+    /// <summary>
+    /// Rol <c>service_request_scheduler</c> (P-06, DD 10.2) que se adopta con <c>SET LOCAL ROLE</c> para encontrar las
+    /// cotizaciones vencidas de todos los tenants. Vacío solo en desarrollo local: sin el rol, RLS no deja ver ninguna.
+    /// </summary>
+    public string SchedulerRole { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Redis de la VM de datos (SAD 5.1, Documento de Infraestructura 3.4): usuario propio <c>service-request</c>, restringido a
+/// las claves <c>service-request:*</c>. Sección <c>Redis</c>; sin <see cref="Endpoint"/> (desarrollo local y pruebas
+/// unitarias) el candado es local al proceso.
+/// </summary>
+public sealed class RedisOptions
+{
+    public const string Section = "Redis";
+
+    /// <summary>Por ejemplo <c>10.43.98.29:6379</c>.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    public string User { get; set; } = string.Empty;
+
+    public string Password { get; set; } = string.Empty;
+
+    public bool Enabled => !string.IsNullOrWhiteSpace(Endpoint);
+}
+
+/// <summary>
+/// Garage de la VM de mensajería y almacenamiento (ADR-016; Documento de Infraestructura 3.4): bucket
+/// <c>service-request-evidencias</c> con la llave <c>service-request</c>, que solo ve ese bucket. Sección <c>Evidence</c>; sin
+/// <see cref="Endpoint"/> (desarrollo local y pruebas unitarias) subir o descargar falla cerrado.
+/// </summary>
+public sealed class EvidenceStorageOptions
+{
+    public const string Section = "Evidence";
+
+    /// <summary>API S3 de Garage, por ejemplo <c>http://10.43.99.8:9000</c> en QA.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    public string Bucket { get; set; } = "service-request-evidencias";
+
+    /// <summary><c>s3_region</c> de Garage (<c>garage_region</c> en Ansible).</summary>
+    public string Region { get; set; } = "garage";
+
+    public string AccessKey { get; set; } = string.Empty;
+
+    public string SecretKey { get; set; } = string.Empty;
+
+    /// <summary>Espera máxima de cada operación con Garage.</summary>
+    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    public bool Enabled => !string.IsNullOrWhiteSpace(Endpoint);
+}

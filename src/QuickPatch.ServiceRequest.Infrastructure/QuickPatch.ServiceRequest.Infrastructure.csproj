@@ -6,6 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.0.104.2" />
     <PackageReference Include="Confluent.Kafka" Version="2.15.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -15,9 +16,16 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.*" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.*" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.*" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.*" />
+    <PackageReference Include="StackExchange.Redis" Version="2.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Datos de las migraciones que se cargan con SQL (por ejemplo, las localidades de P-09). -->
+    <EmbeddedResource Include="Persistence\Migrations\Sql\*.sql" LogicalName="Migrations.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <PropertyGroup>

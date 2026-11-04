@@ -42,4 +42,30 @@ public sealed class ConsumerWithoutTopicTests : IAsyncLifetime
 
         await service.StopAsync(CancellationToken.None);
     }
+
+    /// <summary>
+    /// <c>tenant.status-changed</c> (SCRUM-510) es un topic nuevo: en el despliegue puede existir el servicio antes que el
+    /// topic, y el consumidor debe esperar sin detener el servicio.
+    /// </summary>
+    [Fact]
+    public async Task TenantStatusChanged_TopicInexistente_ElConsumidorSigueVivoYReintenta()
+    {
+        var consumer = new ConsumerBuilder<string, string>(new ConsumerConfig
+        {
+            BootstrapServers = kafka.GetBootstrapAddress(),
+            GroupId = "service-request-service",
+            EnableAutoCommit = false,
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+        }).Build();
+        var scopes = new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+        using var service = new TenantStatusChangedConsumer(scopes, consumer, NullLogger<TenantStatusChangedConsumer>.Instance);
+
+        await service.StartAsync(CancellationToken.None);
+        await Task.Delay(TimeSpan.FromSeconds(8));
+
+        Assert.NotNull(service.ExecuteTask);
+        Assert.False(service.ExecuteTask!.IsCompleted, "El consumidor terminó en lugar de reintentar.");
+
+        await service.StopAsync(CancellationToken.None);
+    }
 }

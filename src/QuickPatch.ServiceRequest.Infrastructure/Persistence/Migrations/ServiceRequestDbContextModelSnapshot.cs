@@ -18,7 +18,7 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
@@ -33,6 +33,11 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Active")
                         .HasColumnType("boolean")
                         .HasColumnName("active");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("description");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -51,6 +56,163 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.HasKey("CategoryId");
 
                     b.ToTable("service_request_categories", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Evidence.ServiceEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("file_url");
+
+                    b.Property<Guid>("ServiceRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_request_id");
+
+                    b.Property<Guid>("TechnicianId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("technician_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("uploaded_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ix_service_evidence_service_request");
+
+                    b.ToTable("service_evidence", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Quotes.Quote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Detail")
+                        .HasColumnType("text")
+                        .HasColumnName("detail");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<decimal>("LaborAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("labor_amount");
+
+                    b.Property<decimal>("MaterialsAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("materials_amount");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("responded_at");
+
+                    b.Property<Guid>("ServiceRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_request_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TechnicianId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("technician_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<decimal>("TotalAmount")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total_amount")
+                        .HasComputedColumnSql("labor_amount + materials_amount", true);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ExpiresAt" }, "ix_quotes_pending_expires")
+                        .HasFilter("status = 'pendiente'");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ix_quotes_service_request");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ux_quotes_accepted")
+                        .IsUnique()
+                        .HasFilter("status = 'aceptada'");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ux_quotes_pending")
+                        .IsUnique()
+                        .HasFilter("status = 'pendiente'");
+
+                    b.ToTable("quotes", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Ratings.Rating", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer")
+                        .HasColumnName("score");
+
+                    b.Property<Guid>("ServiceRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_request_id");
+
+                    b.Property<Guid>("TechnicianId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("technician_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ServiceRequestId" }, "ux_ratings_service_request")
+                        .IsUnique();
+
+                    b.ToTable("ratings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ratings_score", "score BETWEEN 1 AND 5");
+                        });
                 });
 
             modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", b =>
@@ -77,6 +239,15 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("cancelled_at");
 
+                    b.Property<Guid?>("CancelledBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cancelled_by");
+
+                    b.Property<string>("CancelledByType")
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)")
+                        .HasColumnName("cancelled_by_type");
+
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid")
                         .HasColumnName("category_id");
@@ -84,6 +255,18 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ClientId")
                         .HasColumnType("uuid")
                         .HasColumnName("client_id");
+
+                    b.Property<string>("ClientType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("hogar")
+                        .HasColumnName("client_type");
+
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
@@ -102,6 +285,15 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("geometry(Point,4326)")
                         .HasColumnName("location");
+
+                    b.Property<DateTimeOffset?>("MatchingUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("matching_updated_at");
+
+                    b.Property<string>("SiteName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("site_name");
 
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone")
@@ -131,7 +323,102 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "ClientId")
                         .HasDatabaseName("ix_service_requests_tenant_client");
 
+                    b.HasIndex("TenantId", "CompanyId")
+                        .HasDatabaseName("ix_service_requests_company")
+                        .HasFilter("company_id IS NOT NULL");
+
+                    b.HasIndex("TenantId", "TechnicianId", "Status")
+                        .HasDatabaseName("ix_service_requests_tenant_technician_status");
+
                     b.ToTable("service_requests", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Tenants.TenantStatusReplica", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("tenant_status_replica", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Infrastructure.Persistence.AuditLogRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("metadata");
+
+                    b.Property<Guid?>("TargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CreatedAt")
+                        .HasDatabaseName("ix_audit_logs_tenant_created");
+
+                    b.ToTable("audit_logs", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Infrastructure.Persistence.LocalityRecord", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("code");
+
+                    b.Property<MultiPolygon>("Area")
+                        .IsRequired()
+                        .HasColumnType("geometry(MultiPolygon,4326)")
+                        .HasColumnName("area");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Code");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_localities_name");
+
+                    b.ToTable("localities", (string)null);
                 });
 
             modelBuilder.Entity("QuickPatch.ServiceRequest.Infrastructure.Persistence.OutboxEventRecord", b =>
@@ -203,6 +490,33 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.HasKey("EventId");
 
                     b.ToTable("processed_events", (string)null);
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Evidence.ServiceEvidence", b =>
+                {
+                    b.HasOne("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Quotes.Quote", b =>
+                {
+                    b.HasOne("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("QuickPatch.ServiceRequest.Domain.Ratings.Rating", b =>
+                {
+                    b.HasOne("QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -17,12 +17,26 @@ using QuickPatch.ServiceRequest.UnitTests.Support;
 namespace QuickPatch.ServiceRequest.UnitTests.Api;
 
 /// <summary>API completa con los puertos en memoria: autenticación, validación, reglas y contrato HTTP.</summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>
+/// <summary>API con los puertos en memoria. Las subclases agregan configuración con <see cref="Configure"/>.</summary>
+public class ApiFactoryBase : WebApplicationFactory<Program>
 {
     public InMemoryStore Store { get; } = new();
 
+    public FakeUserDirectory Directory { get; } = new();
+
+    public FakeGeocoder Geocoder { get; } = new();
+
+    public FakeLocalityCatalog Localities { get; } = new();
+
+    public InMemoryEvidenceStorage EvidenceStorage { get; } = new();
+
+    protected virtual void Configure(IWebHostBuilder builder)
+    {
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        Configure(builder);
         builder.UseSetting("Jwt:PublicKeyPem", TestTokens.PublicKeyPem);
         builder.UseSetting("ConnectionStrings:ServiceRequest", "Host=sin-base-en-pruebas-unitarias");
         builder.ConfigureTestServices(services =>
@@ -31,12 +45,25 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<ITenantUnitOfWork>(Store);
             services.AddSingleton<IServiceRequestRepository>(Store);
             services.AddSingleton<ICategoryReplicaRepository>(Store);
+            services.AddSingleton<ITenantStatusReplicaRepository>(Store);
             services.AddSingleton<IProcessedEventRepository>(Store);
             services.AddSingleton<IOutbox>(Store);
+            services.AddSingleton<IPlatformServiceRequestCounter>(Store);
+            services.AddSingleton<IAuditLog>(Store);
+            services.AddSingleton<IQuoteRepository>(Store);
+            services.AddSingleton<IExpiredQuoteFinder>(Store);
+            services.AddSingleton<IEvidenceRepository>(Store);
+            services.AddSingleton<IRatingRepository>(Store);
+            services.AddSingleton<IEvidenceStorage>(EvidenceStorage);
+            services.AddSingleton<IUserDirectory>(Directory);
+            services.AddSingleton<IGeocoder>(Geocoder);
+            services.AddSingleton<ILocalityCatalog>(Localities);
             services.Configure<HealthCheckServiceOptions>(o => o.Registrations.Clear());
         });
     }
 }
+
+public sealed class ApiFactory : ApiFactoryBase;
 
 public class ServiceRequestApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
@@ -161,7 +188,7 @@ public class ServiceRequestApiTests(ApiFactory factory) : IClassFixture<ApiFacto
     }
 
     [Fact]
-    public async Task Crear_SinCategoriaNiUbicacion_Responde400()
+    public async Task Crear_SinCategoria_Responde400SinExigirUbicacion()
     {
         using var client = Client();
 
@@ -170,7 +197,24 @@ public class ServiceRequestApiTests(ApiFactory factory) : IClassFixture<ApiFacto
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var errors = (await Json(response)).GetProperty("errors");
         Assert.True(errors.TryGetProperty("categoryId", out _));
-        Assert.True(errors.TryGetProperty("location", out _));
+        Assert.False(errors.TryGetProperty("location", out _), "Desde 1.3.0 location es opcional.");
+    }
+
+    [Fact]
+    public async Task Crear_UbicacionIncompleta_Responde400()
+    {
+        using var client = Client();
+
+        using var response = await client.PostAsJsonAsync(new Uri("/v1/service-requests", UriKind.Relative), new
+        {
+            categoryId = Category,
+            description = "Fuga de agua en la cocina",
+            location = new { latitude = 4.6486 },
+            addressText = "Calle 63 # 9-45, apto 502",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.True((await Json(response)).GetProperty("errors").TryGetProperty("location", out _));
     }
 
     [Fact]

@@ -13,11 +13,36 @@ data:
   Jwt__Audience: "quickpatch"
   Kafka__BootstrapServers: "<vm-mensajeria>:9092"
   Outbox__PublisherRole: "service_request_outbox"
+  # Conteos de todos los tenants para el admin_plataforma (DD 10.4): rol de db/roles.sql, adoptado con SET LOCAL ROLE.
+  Platform__ReadRole: "service_request_platform"
   Kafka__ConsumerGroupId: "service-request-service"
   Coverage__MinLatitude: "4.45"
   Coverage__MaxLatitude: "4.85"
   Coverage__MinLongitude: "-74.25"
   Coverage__MaxLongitude: "-73.98"
+  # Consulta interna por lote de nombres (identity-internal.v1.yaml); por el Service de k8s, sin pasar por el gateway.
+  Identity__BaseUrl: "http://identity.quickpatch.svc.cluster.local:8080"
+  Identity__Timeout: "00:00:02"
+  # Geocodificación propia (ADR-024, RIE-02): Nominatim corre en la VM de datos de cada ambiente (playbook deploy-nominatim.yml
+  # de quickpatch). El playbook reemplaza <vm-datos>. Si no responde, la solicitud con addressText da 422 direccion-no-encontrada.
+  Geocoding__NominatimUrl: "http://<vm-datos>:8088"
+  # Cotizaciones (RF-34, RF-35, SCRUM-488): plazo para responder (RN-Q8, DEP-16) y rol de db/roles.sql con el que el proceso
+  # programado encuentra las vencidas de todos los tenants (P-06, RN-Q6).
+  Quotes__Ttl: "1.00:00:00"
+  Quotes__SchedulerRole: "service_request_scheduler"
+  # Redis de la VM de datos (coordinación del vencimiento, DD 7.13): usuario ACL service-request, solo claves service-request:*.
+  Redis__Endpoint: "<vm-datos>:6379"
+  Redis__User: "service-request"
+  # Fotos de evidencia (RF-15, SCRUM-94): API S3 de Garage en la VM de mensajería y almacenamiento (ADR-016), bucket con la
+  # llave service-request, que solo ve ese bucket. Las claves de la llave van en el Secret.
+  Evidence__Endpoint: "http://<vm-mensajeria>:9000"
+  Evidence__Bucket: "service-request-evidencias"
+  Evidence__Region: "garage"
+  # Lista de categorías sin token (registro de técnicos, contrato 1.8.0, ADR-025): el mismo mapa canal -> tenant de Identity
+  # y Catalog (RN-U5, DEP-09). Con el mapa definido, un canal que no esté aquí recibe 503.
+  Channel__TenantId: "00000000-0000-0000-0000-000000000001"
+  Channel__Tenants__quickpatch-mobile: "00000000-0000-0000-0000-000000000001"
+  Channel__Tenants__quickpatch-web: "00000000-0000-0000-0000-000000000001"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -65,6 +90,12 @@ spec:
               valueFrom: { secretKeyRef: { name: service-request-secretos, key: app-connection } }
             - name: Jwt__PublicKeyPem
               valueFrom: { secretKeyRef: { name: service-request-secretos, key: jwt-public-key } }
+            - name: Redis__Password
+              valueFrom: { secretKeyRef: { name: service-request-secretos, key: redis-password } }
+            - name: Evidence__AccessKey
+              valueFrom: { secretKeyRef: { name: service-request-secretos, key: garage-access-key } }
+            - name: Evidence__SecretKey
+              valueFrom: { secretKeyRef: { name: service-request-secretos, key: garage-secret-key } }
           readinessProbe:
             httpGet: { path: /health/ready, port: http }
             periodSeconds: 10
@@ -101,3 +132,8 @@ spec:
     - http:
         paths:
           - { path: /v1/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
+          # Lista del técnico (contrato 1.2.0). Matching publica /v1/technicians/me; Traefik prioriza la regla más larga.
+          - { path: /v1/technicians/me/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
+          # Panel operativo (contrato 1.4.0). Identity publica /v1/platform; Traefik prioriza la regla más larga.
+          - { path: /v1/admin/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }
+          - { path: /v1/platform/service-requests, pathType: Prefix, backend: { service: { name: service-request, port: { name: http } } } }

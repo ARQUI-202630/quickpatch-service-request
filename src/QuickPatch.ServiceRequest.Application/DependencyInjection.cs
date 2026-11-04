@@ -1,7 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 
 using QuickPatch.ServiceRequest.Application.Categories;
+using QuickPatch.ServiceRequest.Application.Execution;
+using QuickPatch.ServiceRequest.Application.Matching;
+using QuickPatch.ServiceRequest.Application.Quotes;
+using QuickPatch.ServiceRequest.Application.Ratings;
+using QuickPatch.ServiceRequest.Application.References;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
+using QuickPatch.ServiceRequest.Application.Tenants;
 
 namespace QuickPatch.ServiceRequest.Application;
 
@@ -16,8 +22,30 @@ public static class DependencyInjection
 
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<CreateServiceRequestHandler>();
+        services.AddScoped<PreviewLocationHandler>();
         services.AddScoped<GetServiceRequestHandler>();
+        services.AddScoped<ListTechnicianServiceRequestsHandler>();
+        services.AddScoped<ListTenantServiceRequestsHandler>();
+        services.AddScoped<CancelServiceRequestHandler>();
+        services.AddScoped<RateServiceRequestHandler>();
+        services.AddScoped<IssueQuoteHandler>();
+        services.AddScoped<ListQuotesHandler>();
+        services.AddScoped<RespondQuoteHandler>();
+        services.AddScoped<ExpireQuoteHandler>();
+        services.AddScoped<ExpireQuotesBatch>();
+        services.AddScoped<StartServiceHandler>();
+        services.AddScoped<CompleteServiceHandler>();
+        services.AddScoped<UploadEvidenceHandler>();
+        services.AddScoped<ListEvidenceHandler>();
+        services.AddScoped<DownloadEvidenceHandler>();
+        services.AddScoped<ListCategoriesHandler>();
+        services.AddScoped<ListLocalitiesHandler>();
+        services.AddScoped<GetTenantSummaryHandler>();
+        services.AddScoped<GetPlatformSummaryHandler>();
         services.AddScoped<ApplyCategoryChangedHandler>();
+        services.AddScoped<ApplyTenantStatusChangedHandler>();
+        services.AddScoped<MatchingStatusHandler>();
+        services.AddScoped<QuickPatch.ServiceRequest.Application.Payments.PaymentEventsHandler>();
         return services;
     }
 }
