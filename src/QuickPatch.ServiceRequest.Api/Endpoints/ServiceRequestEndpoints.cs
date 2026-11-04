@@ -22,9 +22,15 @@ public sealed record LocationPreviewResponse(LocationDto Location, LocalityDto L
 
 public sealed record LocalityDto(string Code, string Name);
 
+/// <summary>Esquema <c>ServiceRequestRating</c> del contrato (1.12.0): la calificación que el cliente dio al servicio pagado.</summary>
+public sealed record ServiceRequestRatingResponse(int Score, string? Comment, DateTimeOffset RatedAt)
+{
+    public static ServiceRequestRatingResponse? From(Rating? rating) => rating is null ? null : new(rating.Score, rating.Comment, rating.CreatedAt);
+}
+
 /// <summary>
 /// Esquema <c>ServiceRequest</c> del contrato (1.1.0: <c>assignedAt</c>, <c>technician</c> y <c>client</c>; 1.5.0: la cancelación;
-/// 1.7.0: <c>startedAt</c> y <c>completedAt</c>).
+/// 1.7.0: <c>startedAt</c> y <c>completedAt</c>; 1.12.0: <c>rating</c>, null mientras la solicitud no se califique).
 /// </summary>
 public sealed record ServiceRequestResponse(
     Guid Id,
@@ -44,9 +50,11 @@ public sealed record ServiceRequestResponse(
     DateTimeOffset? CompletedAt,
     string ClientType,
     Guid? CompanyId,
-    string? SiteName)
+    string? SiteName,
+    ServiceRequestRatingResponse? Rating)
 {
-    public static ServiceRequestResponse From(DomainServiceRequest s, TechnicianView? technician = null, ClientView? client = null) => new(
+    public static ServiceRequestResponse From(
+        DomainServiceRequest s, TechnicianView? technician = null, ClientView? client = null, Rating? rating = null) => new(
         s.Id,
         s.Status,
         s.CategoryId,
@@ -64,7 +72,8 @@ public sealed record ServiceRequestResponse(
         s.CompletedAt,
         s.ClientType,
         s.CompanyId,
-        s.SiteName);
+        s.SiteName,
+        ServiceRequestRatingResponse.From(rating));
 }
 
 /// <summary>Cuerpo de <c>POST /v1/service-requests/{id}/cancel</c> (contrato 1.5.0).</summary>
@@ -299,7 +308,7 @@ public static class ServiceRequestEndpoints
         var result = await handler.HandleAsync(viewer, id, cancellationToken);
         return result switch
         {
-            GetServiceRequestResult.Found found => Results.Ok(ServiceRequestResponse.From(found.ServiceRequest, found.Technician, found.Client)),
+            GetServiceRequestResult.Found found => Results.Ok(ServiceRequestResponse.From(found.ServiceRequest, found.Technician, found.Client, found.Rating)),
             GetServiceRequestResult.Forbidden => Results.Problem(
                 statusCode: StatusCodes.Status403Forbidden,
                 title: "No puedes ver esta solicitud en su estado actual.",

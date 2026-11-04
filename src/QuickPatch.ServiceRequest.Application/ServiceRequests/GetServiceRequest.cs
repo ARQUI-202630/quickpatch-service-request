@@ -1,4 +1,5 @@
 using QuickPatch.ServiceRequest.Application.Abstractions;
+using QuickPatch.ServiceRequest.Domain.Ratings;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -23,7 +24,9 @@ public sealed record ClientView(Guid Id, string? FullName, string? Phone);
 
 public abstract record GetServiceRequestResult
 {
-    public sealed record Found(DomainServiceRequest ServiceRequest, TechnicianView? Technician, ClientView? Client) : GetServiceRequestResult;
+    /// <param name="Rating">La calificación del servicio pagado (contrato 1.12.0); null si no se calificó o si quien consulta es el técnico.</param>
+    public sealed record Found(DomainServiceRequest ServiceRequest, TechnicianView? Technician, ClientView? Client, Rating? Rating = null)
+        : GetServiceRequestResult;
 
     /// <summary>No existe, es de otro tenant (RLS), de otro cliente o de otro técnico: 404, para no revelar que existe.</summary>
     public sealed record NotFound : GetServiceRequestResult;
@@ -38,12 +41,16 @@ public abstract record GetServiceRequestResult
 /// <item>Cliente dueño: la solicitud completa; <c>technician</c> desde la asignación y <c>client</c> en null.</item>
 /// <item>Técnico asignado: solo entre <c>asignado</c> y <c>completado</c>, con <c>client</c> (nombre y teléfono).</item>
 /// </list>
+/// Desde el contrato 1.12.0 (SCRUM-637) el cliente dueño y el <c>empresa_contacto</c> reciben además la calificación (<c>rating</c>), que sale
+/// de la tabla <c>ratings</c> de la misma base y solo existe en <c>pagado</c> (RN-R3). El técnico asignado no la recibe: solo consulta el
+/// detalle entre <c>asignado</c> y <c>completado</c>, y ahí todavía no hay calificación.
 /// Los nombres y el teléfono vienen de Identity después de cerrar la transacción; si Identity falla, llegan en null.
 /// </summary>
 public sealed class GetServiceRequestHandler(
     ITenantUnitOfWork unitOfWork,
     IServiceRequestRepository serviceRequests,
-    IUserDirectory users)
+    IUserDirectory users,
+    IRatingRepository ratings)
 {
     public async Task<GetServiceRequestResult> HandleAsync(ServiceRequestViewer viewer, Guid id, CancellationToken cancellationToken)
     {
@@ -56,11 +63,22 @@ public sealed class GetServiceRequestHandler(
         }
 
         // El empresa_contacto ve las que creó y las de su empresa (RN-SR14); el cliente, solo las suyas.
-        var serviceRequest = await unitOfWork.ExecuteAsync(
+        var (serviceRequest, rating) = await unitOfWork.ExecuteAsync(
             viewer.TenantId,
-            ct => isTechnician ? serviceRequests.FindForTechnicianAsync(id, viewer.UserId, ct)
-                : isCompanyMember ? serviceRequests.FindForCompanyMemberAsync(id, viewer.UserId, viewer.CompanyId!.Value, ct)
-                : serviceRequests.FindForClientAsync(id, viewer.UserId, ct),
+            async ct =>
+            {
+                var found = await (isTechnician ? serviceRequests.FindForTechnicianAsync(id, viewer.UserId, ct)
+                    : isCompanyMember ? serviceRequests.FindForCompanyMemberAsync(id, viewer.UserId, viewer.CompanyId!.Value, ct)
+                    : serviceRequests.FindForClientAsync(id, viewer.UserId, ct));
+                if (found is null || isTechnician)
+                {
+                    return (found, (Rating?)null);
+                }
+
+                // Misma transacción y mismo tenant (RLS): solo quien ya puede ver el detalle ve la calificación y su comentario.
+                var rated = await ratings.FindByServiceRequestsAsync([found.Id], ct);
+                return (found, rated.GetValueOrDefault(found.Id));
+            },
             cancellationToken);
 
         if (serviceRequest is null)
@@ -99,6 +117,6 @@ public sealed class GetServiceRequestHandler(
             client = new ClientView(serviceRequest.ClientId, contact?.FullName, contact?.Phone);
         }
 
-        return new GetServiceRequestResult.Found(serviceRequest, technician, client);
+        return new GetServiceRequestResult.Found(serviceRequest, technician, client, rating);
     }
 }
