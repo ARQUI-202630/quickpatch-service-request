@@ -4,6 +4,7 @@ using QuickPatch.ServiceRequest.Application.ServiceRequests;
 using QuickPatch.ServiceRequest.Domain.Common;
 using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
+using QuickPatch.Transversal.Http;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 

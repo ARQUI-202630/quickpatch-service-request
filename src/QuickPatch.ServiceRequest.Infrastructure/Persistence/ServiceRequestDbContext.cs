@@ -9,6 +9,7 @@ using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 using QuickPatch.ServiceRequest.Domain.Tenants;
+using QuickPatch.Transversal.Messaging;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
@@ -225,7 +226,7 @@ public sealed class LocalityRecord
 }
 
 /// <summary>Fila de <c>outbox_events</c> (DD 5.15).</summary>
-public sealed class OutboxEventRecord
+public sealed class OutboxEventRecord : IOutboxRecord
 {
     public Guid Id { get; set; }
 
