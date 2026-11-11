@@ -9,35 +9,18 @@ using QuickPatch.ServiceRequest.Domain.Quotes;
 using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 using QuickPatch.ServiceRequest.Domain.Tenants;
+using QuickPatch.Transversal.Messaging;
+using QuickPatch.Transversal.Persistence;
 
 using DomainServiceRequest = QuickPatch.ServiceRequest.Domain.ServiceRequests.ServiceRequest;
 
 namespace QuickPatch.ServiceRequest.Infrastructure.Persistence;
 
-/// <summary>
-/// Transacción por tenant (DD, sección 10.2): fija <c>app.current_tenant</c> con <c>set_config(..., true)</c>,
-/// equivalente a <c>SET LOCAL</c>, antes de ejecutar el trabajo; RLS filtra todo lo que se lea o escriba.
-/// </summary>
+/// <summary>Transacción por tenant (DD, sección 10.2) con la implementación común de ADR-020.</summary>
 public sealed class TenantUnitOfWork(ServiceRequestDbContext db) : ITenantUnitOfWork
 {
-    public async Task<T> ExecuteAsync<T>(Guid tenantId, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(work);
-        if (tenantId == Guid.Empty)
-        {
-            throw new ArgumentException("El tenant es obligatorio.", nameof(tenantId));
-        }
-
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var tenant = tenantId.ToString();
-        await db.Database.ExecuteSqlAsync($"SELECT set_config('app.current_tenant', {tenant}, true)", cancellationToken);
-
-        var result = await work(cancellationToken);
-
-        await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return result;
-    }
+    public Task<T> ExecuteAsync<T>(Guid tenantId, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken) =>
+        TenantTransaction.ExecuteAsync(db, tenantId, work, cancellationToken);
 }
 
 public sealed class ServiceRequestRepository(ServiceRequestDbContext db) : IServiceRequestRepository
@@ -202,36 +185,15 @@ public sealed class TenantStatusReplicaRepository(ServiceRequestDbContext db) : 
     public void Add(TenantStatusReplica tenant) => db.TenantStatuses.Add(tenant);
 }
 
-public sealed class ProcessedEventRepository(ServiceRequestDbContext db) : IProcessedEventRepository
-{
-    public Task<bool> ExistsAsync(Guid eventId, CancellationToken cancellationToken) =>
-        db.ProcessedEvents.AnyAsync(x => x.EventId == eventId, cancellationToken);
-
-    public void Add(Guid eventId, Guid tenantId, string eventType, DateTimeOffset processedAt) =>
-        db.ProcessedEvents.Add(new ProcessedEventRecord
-        {
-            EventId = eventId,
-            TenantId = tenantId,
-            EventType = eventType,
-            ProcessedAt = processedAt,
-        });
-}
+/// <summary>Idempotencia de los consumidores (RN-EV1) con la implementación común de ADR-020.</summary>
+public sealed class ProcessedEventRepository(ServiceRequestDbContext db) : ProcessedEventStore<ServiceRequestDbContext>(db), IProcessedEventRepository;
 
 public sealed class EfOutbox(ServiceRequestDbContext db, TimeProvider clock) : IOutbox
 {
     public void Enqueue(OutboxMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
-        db.OutboxEvents.Add(new OutboxEventRecord
-        {
-            Id = message.Id,
-            TenantId = message.TenantId,
-            AggregateId = message.AggregateId,
-            EventType = message.EventType,
-            Payload = message.Payload,
-            CreatedAt = clock.GetUtcNow(),
-            Attempts = 0,
-        });
+        db.OutboxEvents.Add(OutboxEventRecord.Pending(message.Id, message.TenantId, message.AggregateId, message.EventType, message.Payload, clock.GetUtcNow()));
     }
 }
 

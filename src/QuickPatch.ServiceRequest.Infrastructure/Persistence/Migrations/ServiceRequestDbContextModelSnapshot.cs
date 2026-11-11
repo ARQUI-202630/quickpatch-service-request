@@ -421,7 +421,7 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.ToTable("localities", (string)null);
                 });
 
-            modelBuilder.Entity("QuickPatch.ServiceRequest.Infrastructure.Persistence.OutboxEventRecord", b =>
+            modelBuilder.Entity("QuickPatch.Transversal.Messaging.OutboxEventRecord", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
@@ -467,7 +467,7 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence.Migrations
                     b.ToTable("outbox_events", (string)null);
                 });
 
-            modelBuilder.Entity("QuickPatch.ServiceRequest.Infrastructure.Persistence.ProcessedEventRecord", b =>
+            modelBuilder.Entity("QuickPatch.Transversal.Messaging.ProcessedEventRecord", b =>
                 {
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid")

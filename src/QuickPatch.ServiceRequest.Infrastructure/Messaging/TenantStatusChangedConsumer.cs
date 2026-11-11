@@ -3,12 +3,12 @@ using System.Text.Json;
 using Confluent.Kafka;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using QuickPatch.ServiceRequest.Application.Events;
 using QuickPatch.ServiceRequest.Application.Tenants;
 using QuickPatch.ServiceRequest.Domain.Tenants;
+using QuickPatch.Transversal.Messaging;
 
 namespace QuickPatch.ServiceRequest.Infrastructure.Messaging;
 
@@ -22,56 +22,11 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Messaging;
 public sealed partial class TenantStatusChangedConsumer(
     IServiceScopeFactory scopes,
     IConsumer<string, string> consumer,
-    ILogger<TenantStatusChangedConsumer> logger) : BackgroundService
+    ILogger<TenantStatusChangedConsumer> logger)
+    : KafkaConsumerService(consumer, [EventTypes.TenantStatusChanged], logger)
 {
-    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-        Task.Factory.StartNew(() => ConsumeLoopAsync(stoppingToken), stoppingToken, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
-
-    private async Task ConsumeLoopAsync(CancellationToken stoppingToken)
-    {
-        consumer.Subscribe(EventTypes.TenantStatusChanged);
-        try
-        {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                ConsumeResult<string, string>? result;
-                try
-                {
-                    result = consumer.Consume(TimeSpan.FromSeconds(1));
-                }
-                catch (ConsumeException ex) when (!ex.Error.IsFatal)
-                {
-                    // Por ejemplo, el topic todavía no existe porque Catalog no ha publicado: se espera y se
-                    // reintenta, en lugar de detener el servicio (AC5; hallazgo de POC-BE-001).
-                    LogConsumeFailed(logger, ex.Error.Reason, ex);
-                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
-                    continue;
-                }
-
-                if (result is null)
-                {
-                    continue;
-                }
-
-                if (await TryProcessAsync(result.Message.Value, stoppingToken))
-                {
-                    consumer.Commit(result);
-                }
-                else
-                {
-                    consumer.Seek(result.TopicPartitionOffset);
-                    await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
-                }
-            }
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-        }
-        finally
-        {
-            consumer.Close();
-        }
-    }
+    protected override Task<bool> ProcessAsync(ConsumeResult<string, string> result, CancellationToken cancellationToken) =>
+        TryProcessAsync(result.Message.Value, cancellationToken);
 
     /// <summary>Aplica un mensaje; devuelve false si hay que reintentarlo.</summary>
     public async Task<bool> TryProcessAsync(string value, CancellationToken cancellationToken)
@@ -113,9 +68,6 @@ public sealed partial class TenantStatusChangedConsumer(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Mensaje de tenant.status-changed que no cumple el contrato; se descarta.")]
     private static partial void LogInvalidMessage(ILogger logger, Exception? exception);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "No se pudo leer de tenant.status-changed ({Reason}); se reintentará.")]
-    private static partial void LogConsumeFailed(ILogger logger, string reason, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Falló el procesamiento del evento {EventId}; se reintentará.")]
     private static partial void LogProcessingFailed(ILogger logger, Guid eventId, Exception exception);

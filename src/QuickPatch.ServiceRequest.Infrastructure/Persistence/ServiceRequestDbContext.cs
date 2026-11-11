@@ -162,30 +162,8 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 
-        modelBuilder.Entity<OutboxEventRecord>(e =>
-        {
-            e.ToTable("outbox_events");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
-            e.Property(x => x.TenantId).HasColumnName("tenant_id");
-            e.Property(x => x.AggregateId).HasColumnName("aggregate_id");
-            e.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(100);
-            e.Property(x => x.Payload).HasColumnName("payload").HasColumnType("jsonb");
-            e.Property(x => x.CreatedAt).HasColumnName("created_at");
-            e.Property(x => x.PublishedAt).HasColumnName("published_at");
-            e.Property(x => x.Attempts).HasColumnName("attempts");
-            e.HasIndex(x => x.CreatedAt).HasDatabaseName("ix_outbox_events_pending").HasFilter("published_at IS NULL");
-        });
-
-        modelBuilder.Entity<ProcessedEventRecord>(e =>
-        {
-            e.ToTable("processed_events");
-            e.HasKey(x => x.EventId);
-            e.Property(x => x.EventId).HasColumnName("event_id").ValueGeneratedNever();
-            e.Property(x => x.TenantId).HasColumnName("tenant_id");
-            e.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(100);
-            e.Property(x => x.ProcessedAt).HasColumnName("processed_at");
-        });
+        // Tablas transversales con el mapeo común (ADR-020); las migraciones siguen siendo de este servicio.
+        modelBuilder.MapOutboxEvents().MapProcessedEvents();
 
         // Auditoría propia de ServiceRequest (DD 5.14, v5.3): con tenant y RLS; el rol de la aplicación solo inserta y lee (RN-A1).
         modelBuilder.Entity<AuditLogRecord>(e =>
@@ -223,38 +201,6 @@ public sealed class LocalityRecord
     public string Name { get; set; } = string.Empty;
 
     public MultiPolygon Area { get; set; } = null!;
-}
-
-/// <summary>Fila de <c>outbox_events</c> (DD 5.15).</summary>
-public sealed class OutboxEventRecord : IOutboxRecord
-{
-    public Guid Id { get; set; }
-
-    public Guid TenantId { get; set; }
-
-    public Guid AggregateId { get; set; }
-
-    public string EventType { get; set; } = string.Empty;
-
-    public string Payload { get; set; } = string.Empty;
-
-    public DateTimeOffset CreatedAt { get; set; }
-
-    public DateTimeOffset? PublishedAt { get; set; }
-
-    public int Attempts { get; set; }
-}
-
-/// <summary>Fila de <c>processed_events</c> (DD 5.16).</summary>
-public sealed class ProcessedEventRecord
-{
-    public Guid EventId { get; set; }
-
-    public Guid TenantId { get; set; }
-
-    public string EventType { get; set; } = string.Empty;
-
-    public DateTimeOffset ProcessedAt { get; set; }
 }
 
 /// <summary>Fila de <c>audit_logs</c> de ServiceRequest (DD 5.14, v5.3).</summary>
