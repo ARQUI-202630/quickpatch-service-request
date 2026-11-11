@@ -45,6 +45,9 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 });
 
 app.MapServiceRequestEndpoints();
+app.MapLocationPreviewEndpoints();
+app.MapCancellationEndpoints();
+app.MapTechnicianServiceRequestEndpoints();
 app.MapQuoteEndpoints();
 app.MapExecutionEndpoints();
 app.MapRatingEndpoints();

@@ -71,7 +71,7 @@ public sealed class ServiceRequestDbContext(DbContextOptions<ServiceRequestDbCon
             // Solicitud de empresa (RF-08, DD 5.5 v5.13): el CHECK de client_type lo agrega la migración SolicitudDeEmpresa.
             e.Property(x => x.ClientType).HasColumnName("client_type").HasMaxLength(10).HasDefaultValue("hogar");
             e.Property(x => x.CompanyId).HasColumnName("company_id");
-            e.Property(x => x.SiteName).HasColumnName("site_name").HasMaxLength(DomainServiceRequest.SiteNameMaxLength);
+            e.Property(x => x.SiteName).HasColumnName("site_name").HasMaxLength(ServiceRequestRules.SiteNameMaxLength);
             e.HasIndex(x => new { x.TenantId, x.CompanyId }).HasDatabaseName("ix_service_requests_company").HasFilter("company_id IS NOT NULL");
             e.HasIndex(x => new { x.TenantId, x.ClientId }).HasDatabaseName("ix_service_requests_tenant_client");
             // Historial del técnico (RF-17, DD 5: índice sobre technician_id y status).

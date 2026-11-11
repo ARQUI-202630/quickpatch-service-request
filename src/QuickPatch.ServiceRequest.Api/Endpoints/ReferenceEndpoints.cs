@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 
+using QuickPatch.ServiceRequest.Api.Http;
 using QuickPatch.ServiceRequest.Api.Security;
 using QuickPatch.ServiceRequest.Application.References;
 
@@ -19,9 +20,9 @@ public static class ReferenceEndpoints
     public static IEndpointRouteBuilder MapReferenceEndpoints(this IEndpointRouteBuilder app)
     {
         // Con o sin token: sin token, el registro de técnicos ve las del tenant del canal (RF-02).
-        app.MapGet($"{ServiceRequestEndpoints.BasePath}/categories", ListCategoriesAsync)
+        app.MapGet($"{Routes.ServiceRequests}/categories", ListCategoriesAsync)
             .WithName("listServiceRequestCategories").AllowAnonymous();
-        app.MapGet($"{ServiceRequestEndpoints.BasePath}/localities", ListLocalitiesAsync)
+        app.MapGet($"{Routes.ServiceRequests}/localities", ListLocalitiesAsync)
             .WithName("listServiceRequestLocalities").AllowAnonymous();
         return app;
     }

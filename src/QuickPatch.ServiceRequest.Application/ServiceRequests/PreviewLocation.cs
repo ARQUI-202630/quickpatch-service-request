@@ -25,7 +25,7 @@ public sealed class PreviewLocationHandler(IGeocoder geocoder, ILocalityCatalog 
 {
     public async Task<PreviewLocationResult> HandleAsync(string? addressText, CancellationToken cancellationToken)
     {
-        var address = DomainServiceRequest.ValidateAddress(addressText);
+        var address = ServiceRequestRules.ValidateAddress(addressText);
 
         var geocoded = await geocoder.GeocodeAsync(address, cancellationToken);
         if (geocoded is null)

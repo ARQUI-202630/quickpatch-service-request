@@ -48,7 +48,7 @@ public sealed class CancelServiceRequestHandler(
         ArgumentNullException.ThrowIfNull(command);
 
         // Primero el motivo: una petición inválida no abre transacción ni bloquea la fila.
-        var reason = DomainServiceRequest.ValidateCancellationReason(command.Reason);
+        var reason = ServiceRequestRules.ValidateCancellationReason(command.Reason);
 
         return await unitOfWork.ExecuteAsync<CancelServiceRequestResult>(
             command.TenantId,
