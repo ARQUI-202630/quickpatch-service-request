@@ -5,15 +5,6 @@ namespace QuickPatch.ServiceRequest.Domain.ServiceRequests;
 /// <summary>Solicitud de servicio (DD, tabla <c>service_requests</c>).</summary>
 public sealed class ServiceRequest
 {
-    public const int DescriptionMinLength = 10;
-    public const int DescriptionMaxLength = 1000;
-    public const int AddressMinLength = 5;
-    public const int AddressMaxLength = 255;
-    public const int CancellationReasonMinLength = 5;
-    public const int CancellationReasonMaxLength = 500;
-    public const int SiteNameMinLength = 2;
-    public const int SiteNameMaxLength = 100;
-
     /// <summary>Estados anteriores a <c>en_progreso</c>, desde los que se puede cancelar (RN-SR7).</summary>
     public static readonly IReadOnlySet<string> CancellableStatuses = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -100,7 +91,7 @@ public sealed class ServiceRequest
         Guid? companyId = null,
         string? siteName = null)
     {
-        var errors = CollectFieldErrors(tenantId, clientId, categoryId, description, addressText, companyId, siteName);
+        var errors = ServiceRequestRules.CollectFieldErrors(tenantId, clientId, categoryId, description, addressText, companyId, siteName);
         if (location is null || !location.IsValid)
         {
             errors["location"] = ["La ubicación debe tener una latitud entre -90 y 90 y una longitud entre -180 y 180."];
@@ -119,89 +110,6 @@ public sealed class ServiceRequest
             CompanyId = companyId,
             SiteName = sede,
         };
-    }
-
-    /// <summary>
-    /// Valida todo menos la ubicación. Sirve para no geocodificar una solicitud que de todas formas se rechazaría
-    /// (contrato 1.3.0: sin <c>location</c>, ServiceRequest geocodifica <c>addressText</c>).
-    /// </summary>
-    public static void ValidateFieldsWithoutLocation(
-        Guid tenantId, Guid clientId, Guid categoryId, string? description, string? addressText, Guid? companyId = null, string? siteName = null)
-    {
-        var errors = CollectFieldErrors(tenantId, clientId, categoryId, description, addressText, companyId, siteName);
-        if (errors.Count > 0)
-        {
-            throw new DomainValidationException(errors);
-        }
-    }
-
-    /// <summary>Valida la dirección escrita sola (vista previa de la ubicación, contrato 1.3.0).</summary>
-    public static string ValidateAddress(string? addressText)
-    {
-        var direccion = addressText?.Trim() ?? string.Empty;
-        if (direccion.Length is < AddressMinLength or > AddressMaxLength)
-        {
-            throw new DomainValidationException(new Dictionary<string, string[]>
-            {
-                ["addressText"] = [$"La dirección debe tener entre {AddressMinLength} y {AddressMaxLength} caracteres."],
-            });
-        }
-
-        return direccion;
-    }
-
-    private static Dictionary<string, string[]> CollectFieldErrors(
-        Guid tenantId, Guid clientId, Guid categoryId, string? description, string? addressText, Guid? companyId, string? siteName)
-    {
-        var errors = new Dictionary<string, string[]>();
-        var descripcion = description?.Trim() ?? string.Empty;
-        var direccion = addressText?.Trim() ?? string.Empty;
-
-        if (tenantId == Guid.Empty)
-        {
-            errors["tenantId"] = ["El tenant es obligatorio."];
-        }
-
-        if (clientId == Guid.Empty)
-        {
-            errors["clientId"] = ["El cliente es obligatorio."];
-        }
-
-        if (categoryId == Guid.Empty)
-        {
-            errors["categoryId"] = ["La categoría es obligatoria."];
-        }
-
-        if (descripcion.Length is < DescriptionMinLength or > DescriptionMaxLength)
-        {
-            errors["description"] = [$"La descripción debe tener entre {DescriptionMinLength} y {DescriptionMaxLength} caracteres."];
-        }
-
-        if (direccion.Length is < AddressMinLength or > AddressMaxLength)
-        {
-            errors["addressText"] = [$"La dirección debe tener entre {AddressMinLength} y {AddressMaxLength} caracteres."];
-        }
-
-        if (companyId == Guid.Empty)
-        {
-            errors["companyId"] = ["La empresa del token no es válida."];
-        }
-
-        // Una sede en blanco cuenta como sin sede.
-        if (!string.IsNullOrWhiteSpace(siteName))
-        {
-            var sede = siteName.Trim();
-            if (companyId is null)
-            {
-                errors["siteName"] = ["La sede solo aplica a las solicitudes de empresa."];
-            }
-            else if (sede.Length is < SiteNameMinLength or > SiteNameMaxLength)
-            {
-                errors["siteName"] = [$"La sede debe tener entre {SiteNameMinLength} y {SiteNameMaxLength} caracteres."];
-            }
-        }
-
-        return errors;
     }
 
     /// <summary>
@@ -283,21 +191,6 @@ public sealed class ServiceRequest
     /// <summary><c>cliente</c>, <c>admin_tenant</c> o <c>sistema</c> (RN-SR8, <see cref="CancellationActor"/>).</summary>
     public string? CancelledByType { get; private set; }
 
-    /// <summary>Valida el motivo de la cancelación (RF-36) y lo devuelve sin espacios al inicio ni al final.</summary>
-    public static string ValidateCancellationReason(string? reason)
-    {
-        var motivo = reason?.Trim() ?? string.Empty;
-        if (motivo.Length is < CancellationReasonMinLength or > CancellationReasonMaxLength)
-        {
-            throw new DomainValidationException(new Dictionary<string, string[]>
-            {
-                ["reason"] = [$"El motivo debe tener entre {CancellationReasonMinLength} y {CancellationReasonMaxLength} caracteres."],
-            });
-        }
-
-        return motivo;
-    }
-
     /// <summary>
     /// Cancela la solicitud si el servicio no ha iniciado (RN-SR7) y registra quién y por qué (RN-SR8). Devuelve false,
     /// sin cambiar nada, desde <c>en_progreso</c>, <c>completado</c>, <c>pagado</c> o <c>cancelado</c>.
@@ -317,7 +210,7 @@ public sealed class ServiceRequest
 
         Status = ServiceRequestStatus.Cancelado;
         CancelledAt = cancelledAt;
-        CancellationReason = ValidateCancellationReason(reason);
+        CancellationReason = ServiceRequestRules.ValidateCancellationReason(reason);
         CancelledBy = cancelledBy;
         CancelledByType = cancelledByType;
         return true;
@@ -412,21 +305,4 @@ public sealed class ServiceRequest
             CompanyId = companyId,
             SiteName = siteName,
         };
-}
-
-/// <summary>Tipo de cliente de la solicitud (<c>client_type</c>, RN-SR12).</summary>
-public static class ClientTypes
-{
-    public const string Hogar = "hogar";
-    public const string Empresa = "empresa";
-}
-
-/// <summary>Quién canceló la solicitud (<c>cancelled_by_type</c>, RN-SR8).</summary>
-public static class CancellationActor
-{
-    public const string Cliente = "cliente";
-    public const string AdminTenant = "admin_tenant";
-    public const string Sistema = "sistema";
-
-    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { Cliente, AdminTenant, Sistema };
 }

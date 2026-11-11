@@ -55,7 +55,7 @@ public static class QuoteEndpoints
 {
     public static IEndpointRouteBuilder MapQuoteEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup($"{ServiceRequestEndpoints.BasePath}/{{id:guid}}/quotes");
+        var group = app.MapGroup($"{Routes.ServiceRequests}/{{id:guid}}/quotes");
         group.MapGet("/", ListAsync).WithName("listQuotes").RequireAuthorization(AuthenticatedUser.ReadPolicy);
         group.MapPost("/", IssueAsync).WithName("issueQuote").RequireAuthorization(AuthenticatedUser.TechnicianPolicy);
         group.MapPost("/{quoteId:guid}/accept", AcceptAsync).WithName("acceptQuote").RequireAuthorization(AuthenticatedUser.ClientPolicy);
@@ -93,13 +93,13 @@ public static class QuoteEndpoints
         }
         catch (DomainValidationException ex)
         {
-            return ServiceRequestEndpoints.ValidationProblem(ex.Errors);
+            return ApiResults.ValidationProblem(ex.Errors);
         }
 
         return result switch
         {
             IssueQuoteResult.Issued issued => Results.Created(
-                $"{ServiceRequestEndpoints.BasePath}/{id}/quotes", QuoteResponse.From(issued.Quote)),
+                $"{Routes.ServiceRequests}/{id}/quotes", QuoteResponse.From(issued.Quote)),
             IssueQuoteResult.InvalidTransition invalid => Results.Problem(
                 statusCode: StatusCodes.Status409Conflict,
                 type: Problems.InvalidTransition,
@@ -144,7 +144,7 @@ public static class QuoteEndpoints
         }
         catch (DomainValidationException ex)
         {
-            return ServiceRequestEndpoints.ValidationProblem(ex.Errors);
+            return ApiResults.ValidationProblem(ex.Errors);
         }
 
         return result switch
@@ -161,7 +161,7 @@ public static class QuoteEndpoints
     }
 
     private static IResult Unauthenticated() =>
-        Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "El token no trae usuario ni tenant válidos.");
+        ApiResults.InvalidToken();
 
     private static IResult NotFound() => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "La solicitud no existe.");
 }

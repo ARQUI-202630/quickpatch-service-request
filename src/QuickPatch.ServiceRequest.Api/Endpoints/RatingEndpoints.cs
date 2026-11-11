@@ -24,7 +24,7 @@ public static class RatingEndpoints
 {
     public static IEndpointRouteBuilder MapRatingEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost($"{ServiceRequestEndpoints.BasePath}/{{id:guid}}/rating", RateAsync)
+        app.MapPost($"{Routes.ServiceRequests}/{{id:guid}}/rating", RateAsync)
             .WithName("rateServiceRequest")
             .RequireAuthorization(AuthenticatedUser.ClientPolicy);
         return app;
@@ -39,7 +39,7 @@ public static class RatingEndpoints
     {
         if (!AuthenticatedUser.TryFrom(context.User, out var user))
         {
-            return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "El token no trae usuario ni tenant válidos.");
+            return ApiResults.InvalidToken();
         }
 
         RateServiceRequestResult result;
@@ -51,7 +51,7 @@ public static class RatingEndpoints
         }
         catch (DomainValidationException ex)
         {
-            return ServiceRequestEndpoints.ValidationProblem(ex.Errors);
+            return ApiResults.ValidationProblem(ex.Errors);
         }
 
         return result switch

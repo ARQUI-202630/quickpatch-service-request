@@ -53,6 +53,14 @@ public sealed record AuthenticatedUser(Guid UserId, Guid TenantId, string Role, 
     /// <summary>Evidencias (contrato 1.7.0): el cliente dueño, el técnico asignado y el <c>admin_tenant</c>.</summary>
     public const string EvidenceReadPolicy = "ClienteTecnicoOAdminTenant";
 
+    /// <summary>Token de la cabecera <c>Authorization: Bearer</c>, o vacío si no llega. Se reenvía, nunca se registra.</summary>
+    public static string BearerToken(HttpContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var header = context.Request.Headers.Authorization.ToString();
+        return header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header["Bearer ".Length..].Trim() : string.Empty;
+    }
+
     public static bool TryFrom(ClaimsPrincipal principal, out AuthenticatedUser user)
     {
         ArgumentNullException.ThrowIfNull(principal);

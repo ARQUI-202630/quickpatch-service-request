@@ -65,7 +65,7 @@ public sealed class CreateServiceRequestHandler(
         if (location is null)
         {
             // Primero el resto de los campos: no se geocodifica una solicitud que de todas formas se rechazaría.
-            DomainServiceRequest.ValidateFieldsWithoutLocation(
+            ServiceRequestRules.ValidateFieldsWithoutLocation(
                 command.TenantId, command.ClientId, command.CategoryId, command.Description, command.AddressText, command.CompanyId, command.SiteName);
             var geocoded = await geocoder.GeocodeAsync(command.AddressText!.Trim(), cancellationToken);
             if (geocoded is null)

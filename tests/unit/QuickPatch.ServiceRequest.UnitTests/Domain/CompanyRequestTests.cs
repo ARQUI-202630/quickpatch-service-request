@@ -37,7 +37,7 @@ public class CompanyRequestTests
         Assert.Contains("siteName", Assert.Throws<DomainValidationException>(() => Create(Guid.NewGuid(), "A")).Errors.Keys);
         Assert.Contains("siteName", Assert.Throws<DomainValidationException>(() => Create(Guid.NewGuid(), new string('s', 101))).Errors.Keys);
         Assert.Contains("companyId", Assert.Throws<DomainValidationException>(() => Create(Guid.Empty)).Errors.Keys);
-        Assert.Contains("siteName", Assert.Throws<DomainValidationException>(() => DomainServiceRequest.ValidateFieldsWithoutLocation(
+        Assert.Contains("siteName", Assert.Throws<DomainValidationException>(() => ServiceRequestRules.ValidateFieldsWithoutLocation(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Fuga de agua en la cocina", "Calle 63 # 9-45", null, "Sede")).Errors.Keys);
     }
 
