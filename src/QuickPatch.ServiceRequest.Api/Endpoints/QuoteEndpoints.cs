@@ -5,6 +5,7 @@ using QuickPatch.ServiceRequest.Api.Security;
 using QuickPatch.ServiceRequest.Application.Quotes;
 using QuickPatch.ServiceRequest.Domain.Common;
 using QuickPatch.ServiceRequest.Domain.Quotes;
+using QuickPatch.Transversal.Http;
 
 namespace QuickPatch.ServiceRequest.Api.Endpoints;
 

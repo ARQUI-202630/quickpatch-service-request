@@ -3,6 +3,7 @@ using QuickPatch.ServiceRequest.Api.Security;
 using QuickPatch.ServiceRequest.Application.Ratings;
 using QuickPatch.ServiceRequest.Domain.Common;
 using QuickPatch.ServiceRequest.Domain.Ratings;
+using QuickPatch.Transversal.Http;
 
 namespace QuickPatch.ServiceRequest.Api.Endpoints;
 

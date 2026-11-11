@@ -7,6 +7,7 @@ using QuickPatch.ServiceRequest.Api.Http;
 using QuickPatch.ServiceRequest.Api.Security;
 using QuickPatch.ServiceRequest.Application;
 using QuickPatch.ServiceRequest.Infrastructure;
+using QuickPatch.Transversal.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
