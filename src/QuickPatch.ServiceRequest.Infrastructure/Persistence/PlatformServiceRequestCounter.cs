@@ -1,10 +1,9 @@
-using System.Text.RegularExpressions;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Infrastructure.Options;
+using QuickPatch.Transversal.Persistence;
 
 namespace QuickPatch.ServiceRequest.Infrastructure.Persistence;
 
@@ -14,7 +13,7 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence;
 /// <c>tenant_id</c>, <c>status</c> y <c>created_at</c>) y agrupa en la base: no trae ninguna fila de solicitud a memoria.
 /// El rol vuelve al de la conexión al terminar la transacción.
 /// </summary>
-public sealed partial class PlatformServiceRequestCounter(ServiceRequestDbContext db, IOptions<PlatformOptions> options)
+public sealed class PlatformServiceRequestCounter(ServiceRequestDbContext db, IOptions<PlatformOptions> options)
     : IPlatformServiceRequestCounter
 {
     public async Task<IReadOnlyList<TenantStatusCountRow>> CountByTenantAsync(
@@ -24,17 +23,8 @@ public sealed partial class PlatformServiceRequestCounter(ServiceRequestDbContex
         await db.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY", cancellationToken);
 
         var role = options.Value.ReadRole;
-        if (!string.IsNullOrWhiteSpace(role))
-        {
-            if (!RoleName().IsMatch(role))
-            {
-                throw new InvalidOperationException("Platform:ReadRole no es un nombre de rol válido.");
-            }
-
-#pragma warning disable EF1002 // El nombre del rol se validó con una expresión regular estricta; no admite parámetros.
-            await db.Database.ExecuteSqlRawAsync($"SET LOCAL ROLE \"{role}\"", cancellationToken);
-#pragma warning restore EF1002
-        }
+        // Rol validado y adoptado con la implementación común (ADR-020); vacío solo en desarrollo local.
+        await SessionRole.SetAsync(db, role, cancellationToken);
 
         // Solo columnas que el rol puede leer. Sin el rol (desarrollo local) RLS sigue activa y, sin tenant fijado, no ve nada.
         var rows = tenantId is { } tenant
@@ -52,7 +42,4 @@ public sealed partial class PlatformServiceRequestCounter(ServiceRequestDbContex
         await transaction.CommitAsync(cancellationToken);
         return rows;
     }
-
-    [GeneratedRegex("^[a-z_][a-z0-9_]{0,62}$")]
-    private static partial Regex RoleName();
 }
