@@ -21,6 +21,7 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton(TimeProvider.System);
+        services.AddScoped<ServiceLocationResolver>();
         services.AddScoped<CreateServiceRequestHandler>();
         services.AddScoped<PreviewLocationHandler>();
         services.AddScoped<GetServiceRequestHandler>();
