@@ -90,7 +90,7 @@ public class CreateServiceRequestTenantStatusTests
     private readonly Guid category = Guid.NewGuid();
 
     private CreateServiceRequestHandler Handler() =>
-        new(store, store, store, store, store, new FakeGeocoder(), new FakeLocalityCatalog(), CoverageArea.Bogota, new FixedClock(Now));
+        new(store, store, store, store, store, new ServiceLocationResolver(new FakeGeocoder(), new FakeLocalityCatalog(), CoverageArea.Bogota), new FixedClock(Now));
 
     private CreateServiceRequestCommand Command(Guid? tenantId = null) =>
         new(tenantId ?? tenant, Guid.NewGuid(), Guid.NewGuid(), category, "Fuga de agua en la cocina", new GeoPoint(4.6486, -74.063), "Calle 63 # 9-45, apto 502");
