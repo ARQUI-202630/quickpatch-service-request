@@ -1,3 +1,4 @@
+using QuickPatch.ServiceRequest.Api.Http;
 using QuickPatch.ServiceRequest.Api.Security;
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
@@ -52,7 +53,7 @@ public static partial class AdminServiceRequestEndpoints
 
     public static IEndpointRouteBuilder MapAdminServiceRequestEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet(ServiceRequestEndpoints.BasePath, ListForTenantAsync).WithName("listServiceRequests")
+        app.MapGet(Routes.ServiceRequests, ListForTenantAsync).WithName("listServiceRequests")
             .RequireAuthorization(AuthenticatedUser.ListPolicy);
         app.MapGet(AdminSummaryPath, GetTenantSummaryAsync).WithName("getServiceRequestSummary")
             .RequireAuthorization(AuthenticatedUser.AdminTenantPolicy);
@@ -76,11 +77,11 @@ public static partial class AdminServiceRequestEndpoints
 
         // page y size llegan como texto para responder 400 con el campo, igual que la lista del técnico.
         var errors = new Dictionary<string, string[]>();
-        var pageNumber = ServiceRequestEndpoints.ParseOptionalInt(page, "page", errors);
-        var pageSize = ServiceRequestEndpoints.ParseOptionalInt(size, "size", errors);
+        var pageNumber = ApiResults.ParseOptionalInt(page, "page", errors);
+        var pageSize = ApiResults.ParseOptionalInt(size, "size", errors);
         if (errors.Count > 0)
         {
-            return ServiceRequestEndpoints.ValidationProblem(errors);
+            return ApiResults.ValidationProblem(errors);
         }
 
         try
@@ -96,7 +97,7 @@ public static partial class AdminServiceRequestEndpoints
         }
         catch (DomainValidationException ex)
         {
-            return ServiceRequestEndpoints.ValidationProblem(ex.Errors);
+            return ApiResults.ValidationProblem(ex.Errors);
         }
     }
 
@@ -129,7 +130,7 @@ public static partial class AdminServiceRequestEndpoints
         {
             if (!Guid.TryParse(tenantId, out var parsed) || parsed == Guid.Empty)
             {
-                return ServiceRequestEndpoints.ValidationProblem(
+                return ApiResults.ValidationProblem(
                     new Dictionary<string, string[]> { ["tenantId"] = ["Debe ser un UUID."] });
             }
 
@@ -148,7 +149,7 @@ public static partial class AdminServiceRequestEndpoints
     }
 
     private static IResult Unauthorized() =>
-        Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "El token no trae usuario ni tenant válidos.");
+        ApiResults.InvalidToken();
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Operación de plataforma: conteo de solicitudes por tenant por el usuario {UserId}, filtro de tenant {TenantFilter} (vacío: todos).")]

@@ -1,5 +1,6 @@
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Application.ServiceRequests;
+using QuickPatch.ServiceRequest.Domain.Ratings;
 using QuickPatch.ServiceRequest.Domain.ServiceRequests;
 using QuickPatch.ServiceRequest.UnitTests.Support;
 
@@ -24,7 +25,7 @@ public class ServiceRequestDetailTests
         directory.Users[technician] = new UserContact(technician, "Carlos Pérez", "3101234567");
     }
 
-    private GetServiceRequestHandler Handler() => new(store, store, directory);
+    private GetServiceRequestHandler Handler() => new(store, store, directory, store);
 
     private DomainServiceRequest Seed(string status, Guid? assigned)
     {
@@ -142,5 +143,54 @@ public class ServiceRequestDetailTests
     public async Task SinViewer_LanzaExcepcion()
     {
         await Assert.ThrowsAsync<ArgumentNullException>(() => Handler().HandleAsync(null!, Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Cliente_VeLaCalificacionDelServicioPagado()
+    {
+        var request = Seed(ServiceRequestStatus.Pagado, technician);
+        store.Ratings.Add(Rating.Create(tenant, request.Id, technician, 5, "Puntual y ordenado.", Now.AddHours(1)));
+
+        var result = await Handler().HandleAsync(Viewer(client, "cliente"), request.Id, CancellationToken.None);
+
+        var found = Assert.IsType<GetServiceRequestResult.Found>(result);
+        Assert.NotNull(found.Rating);
+        Assert.Equal(5, found.Rating.Score);
+        Assert.Equal("Puntual y ordenado.", found.Rating.Comment);
+        Assert.Equal(Now.AddHours(1), found.Rating.CreatedAt);
+    }
+
+    [Theory]
+    [InlineData(ServiceRequestStatus.Completado)]
+    [InlineData(ServiceRequestStatus.Pagado)]
+    public async Task Cliente_SinCalificar_RatingNulo(string status)
+    {
+        var request = Seed(status, technician);
+
+        var result = await Handler().HandleAsync(Viewer(client, "cliente"), request.Id, CancellationToken.None);
+
+        Assert.Null(Assert.IsType<GetServiceRequestResult.Found>(result).Rating);
+    }
+
+    [Fact]
+    public async Task TecnicoAsignado_NuncaRecibeLaCalificacion()
+    {
+        var request = Seed(ServiceRequestStatus.Completado, technician);
+        store.Ratings.Add(Rating.Create(tenant, request.Id, technician, 4, "No debe verla el técnico.", Now.AddHours(1)));
+
+        var result = await Handler().HandleAsync(Viewer(technician, "tecnico"), request.Id, CancellationToken.None);
+
+        Assert.Null(Assert.IsType<GetServiceRequestResult.Found>(result).Rating);
+    }
+
+    [Fact]
+    public async Task LaCalificacionDeOtroTenant_NoSeVe()
+    {
+        var request = Seed(ServiceRequestStatus.Pagado, technician);
+        store.Ratings.Add(Rating.Create(Guid.NewGuid(), request.Id, technician, 1, "Es de otro tenant.", Now.AddHours(1)));
+
+        var result = await Handler().HandleAsync(Viewer(client, "cliente"), request.Id, CancellationToken.None);
+
+        Assert.Null(Assert.IsType<GetServiceRequestResult.Found>(result).Rating);
     }
 }

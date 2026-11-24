@@ -12,7 +12,7 @@ public class PreviewLocationTests
     private readonly FakeGeocoder geocoder = new();
     private readonly FakeLocalityCatalog localities = new();
 
-    private PreviewLocationHandler Handler() => new(geocoder, localities, CoverageArea.Bogota);
+    private PreviewLocationHandler Handler() => new(new ServiceLocationResolver(geocoder, localities, CoverageArea.Bogota));
 
     [Fact]
     public async Task DireccionEncontrada_DevuelvePuntoLocalidadYDireccionReconocida()

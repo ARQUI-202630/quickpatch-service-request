@@ -72,19 +72,19 @@ public class ServiceRequestTests
     [Fact]
     public void ValidarSinUbicacion_NoExigeUbicacionPeroSiLoDemas()
     {
-        DomainServiceRequest.ValidateFieldsWithoutLocation(
+        ServiceRequestRules.ValidateFieldsWithoutLocation(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Fuga de agua en la cocina", "Calle 63 # 9-45");
 
         var ex = Assert.Throws<DomainValidationException>(() =>
-            DomainServiceRequest.ValidateFieldsWithoutLocation(Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), "corta", "abc"));
+            ServiceRequestRules.ValidateFieldsWithoutLocation(Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), "corta", "abc"));
         Assert.Equal(["addressText", "description", "tenantId"], ex.Errors.Keys.Order(StringComparer.Ordinal));
     }
 
     [Fact]
     public void ValidarDireccion_DevuelveLaDireccionSinEspacios()
     {
-        Assert.Equal("Calle 63 # 9-45", DomainServiceRequest.ValidateAddress("  Calle 63 # 9-45 "));
-        Assert.Throws<DomainValidationException>(() => DomainServiceRequest.ValidateAddress(new string('x', 256)));
+        Assert.Equal("Calle 63 # 9-45", ServiceRequestRules.ValidateAddress("  Calle 63 # 9-45 "));
+        Assert.Throws<DomainValidationException>(() => ServiceRequestRules.ValidateAddress(new string('x', 256)));
     }
 
     [Fact]

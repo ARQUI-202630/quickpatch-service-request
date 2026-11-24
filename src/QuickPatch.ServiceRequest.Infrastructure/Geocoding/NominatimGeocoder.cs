@@ -85,7 +85,7 @@ public sealed partial class NominatimGeocoder(
         }
 
         var street = addressText[..cut].Trim();
-        return street.Length >= Domain.ServiceRequests.ServiceRequest.AddressMinLength ? street : null;
+        return street.Length >= Domain.ServiceRequests.ServiceRequestRules.AddressMinLength ? street : null;
     }
 
     private async Task<GeocodedAddress?> SearchAsync(string query, CancellationToken cancellationToken)

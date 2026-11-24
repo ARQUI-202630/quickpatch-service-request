@@ -3,6 +3,7 @@ using QuickPatch.ServiceRequest.Api.Security;
 using QuickPatch.ServiceRequest.Application.Execution;
 using QuickPatch.ServiceRequest.Domain.Common;
 using QuickPatch.ServiceRequest.Domain.Evidence;
+using QuickPatch.Transversal.Http;
 
 namespace QuickPatch.ServiceRequest.Api.Endpoints;
 
@@ -36,7 +37,7 @@ public static class ExecutionEndpoints
 
     public static IEndpointRouteBuilder MapExecutionEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup($"{ServiceRequestEndpoints.BasePath}/{{id:guid}}");
+        var group = app.MapGroup($"{Routes.ServiceRequests}/{{id:guid}}");
         group.MapPost("/start", StartAsync).WithName("startService").RequireAuthorization(AuthenticatedUser.TechnicianPolicy);
         group.MapPost("/complete", CompleteAsync).WithName("completeService").RequireAuthorization(AuthenticatedUser.TechnicianPolicy);
         group.MapPost("/evidence", UploadAsync).WithName("uploadEvidence").RequireAuthorization(AuthenticatedUser.TechnicianPolicy);
@@ -100,7 +101,7 @@ public static class ExecutionEndpoints
         var content = await ReadFileAsync(context.Request, cancellationToken);
         if (content.Error is not null)
         {
-            return ServiceRequestEndpoints.ValidationProblem(new Dictionary<string, string[]> { [FileField] = [content.Error] });
+            return ApiResults.ValidationProblem(new Dictionary<string, string[]> { [FileField] = [content.Error] });
         }
 
         UploadEvidenceResult result;
@@ -110,13 +111,13 @@ public static class ExecutionEndpoints
         }
         catch (DomainValidationException ex)
         {
-            return ServiceRequestEndpoints.ValidationProblem(ex.Errors);
+            return ApiResults.ValidationProblem(ex.Errors);
         }
 
         return result switch
         {
             UploadEvidenceResult.Uploaded uploaded => Results.Created(
-                $"{ServiceRequestEndpoints.BasePath}/{id}/evidence/{uploaded.Evidence.Id}/file", EvidenceResponse.From(uploaded.Evidence)),
+                $"{Routes.ServiceRequests}/{id}/evidence/{uploaded.Evidence.Id}/file", EvidenceResponse.From(uploaded.Evidence)),
             UploadEvidenceResult.InvalidTransition invalid => InvalidTransition(
                 "La solicitud no admite evidencias", invalid.Status, "en_progreso"),
             UploadEvidenceResult.LimitReached => Results.Problem(
@@ -221,7 +222,7 @@ public static class ExecutionEndpoints
             detail: $"La solicitud está en '{status}' y la operación requiere '{required}'.");
 
     private static IResult Unauthenticated() =>
-        Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "El token no trae usuario ni tenant válidos.");
+        ApiResults.InvalidToken();
 
     private static IResult NotFound() => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "La solicitud no existe.");
 }

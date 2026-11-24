@@ -17,6 +17,7 @@ using QuickPatch.ServiceRequest.Infrastructure.Options;
 using QuickPatch.ServiceRequest.Infrastructure.Persistence;
 using QuickPatch.ServiceRequest.Infrastructure.Scheduling;
 using QuickPatch.ServiceRequest.Infrastructure.Storage;
+using QuickPatch.Transversal.Messaging;
 
 using StackExchange.Redis;
 
@@ -153,8 +154,8 @@ public static class DependencyInjection
                 AutoOffsetReset = AutoOffsetReset.Earliest,
             }).Build());
 
-            services.AddSingleton<OutboxPublisher>();
-            services.AddHostedService(sp => sp.GetRequiredService<OutboxPublisher>());
+            services.AddSingleton<OutboxPublisher<ServiceRequestDbContext, OutboxEventRecord>>();
+            services.AddHostedService(sp => sp.GetRequiredService<OutboxPublisher<ServiceRequestDbContext, OutboxEventRecord>>());
             services.AddSingleton<CategoryChangedConsumer>();
             services.AddHostedService(sp => sp.GetRequiredService<CategoryChangedConsumer>());
 

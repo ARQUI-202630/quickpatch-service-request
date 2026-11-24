@@ -1,3 +1,5 @@
+using QuickPatch.Transversal.Http;
+
 namespace QuickPatch.ServiceRequest.Api.Http;
 
 /// <summary>Tipos de error del contrato (<c>application/problem+json</c>, RFC 9457).</summary>

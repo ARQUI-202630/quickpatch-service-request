@@ -21,24 +21,19 @@ public abstract record PreviewLocationResult
 /// la dirección igual que al crear y devuelve el punto y su localidad, sin crear nada. Nominatim no usa el número de casa,
 /// así que el cliente confirma o mueve el pin antes de crear la solicitud con <c>location</c>.
 /// </summary>
-public sealed class PreviewLocationHandler(IGeocoder geocoder, ILocalityCatalog localities, CoverageArea coverageArea)
+public sealed class PreviewLocationHandler(ServiceLocationResolver locations)
 {
     public async Task<PreviewLocationResult> HandleAsync(string? addressText, CancellationToken cancellationToken)
     {
-        var address = DomainServiceRequest.ValidateAddress(addressText);
+        var address = ServiceRequestRules.ValidateAddress(addressText);
 
-        var geocoded = await geocoder.GeocodeAsync(address, cancellationToken);
+        var geocoded = await locations.GeocodeAsync(address, cancellationToken);
         if (geocoded is null)
         {
             return new PreviewLocationResult.AddressNotFound();
         }
 
-        if (!coverageArea.Contains(geocoded.Location))
-        {
-            return new PreviewLocationResult.OutOfCoverage();
-        }
-
-        var locality = await localities.FindContainingAsync(geocoded.Location, cancellationToken);
+        var locality = await locations.FindLocalityAsync(geocoded.Location, cancellationToken);
         return locality is null
             ? new PreviewLocationResult.OutOfCoverage()
             : new PreviewLocationResult.Found(geocoded.Location, locality, geocoded.MatchedAddress);

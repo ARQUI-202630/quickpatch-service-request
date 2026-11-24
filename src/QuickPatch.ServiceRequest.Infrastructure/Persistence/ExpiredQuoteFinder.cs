@@ -1,10 +1,9 @@
-using System.Text.RegularExpressions;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 using QuickPatch.ServiceRequest.Application.Abstractions;
 using QuickPatch.ServiceRequest.Infrastructure.Options;
+using QuickPatch.Transversal.Persistence;
 
 namespace QuickPatch.ServiceRequest.Infrastructure.Persistence;
 
@@ -14,7 +13,7 @@ namespace QuickPatch.ServiceRequest.Infrastructure.Persistence;
 /// identificador, tenant, solicitud, estado y vencimiento). No modifica nada: cada cotización se vence después en una
 /// transacción con el rol de la aplicación y el tenant de la fila.
 /// </summary>
-public sealed partial class ExpiredQuoteFinder(ServiceRequestDbContext db, IOptions<QuotesOptions> options) : IExpiredQuoteFinder
+public sealed class ExpiredQuoteFinder(ServiceRequestDbContext db, IOptions<QuotesOptions> options) : IExpiredQuoteFinder
 {
     public async Task<IReadOnlyList<ExpiredQuoteRef>> FindAsync(DateTimeOffset now, int limit, CancellationToken cancellationToken)
     {
@@ -22,17 +21,8 @@ public sealed partial class ExpiredQuoteFinder(ServiceRequestDbContext db, IOpti
         await db.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY", cancellationToken);
 
         var role = options.Value.SchedulerRole;
-        if (!string.IsNullOrWhiteSpace(role))
-        {
-            if (!RoleName().IsMatch(role))
-            {
-                throw new InvalidOperationException("Quotes:SchedulerRole no es un nombre de rol válido.");
-            }
-
-#pragma warning disable EF1002 // El nombre del rol se validó con una expresión regular estricta; no admite parámetros.
-            await db.Database.ExecuteSqlRawAsync($"SET LOCAL ROLE \"{role}\"", cancellationToken);
-#pragma warning restore EF1002
-        }
+        // Rol validado y adoptado con la implementación común (ADR-020); vacío solo en desarrollo local.
+        await SessionRole.SetAsync(db, role, cancellationToken);
 
         // Solo columnas que el rol puede leer. Sin el rol (desarrollo local), RLS sin tenant fijado no deja ver ninguna.
         var rows = await db.Database.SqlQuery<ExpiredQuoteRef>($"""
@@ -44,7 +34,4 @@ public sealed partial class ExpiredQuoteFinder(ServiceRequestDbContext db, IOpti
         await transaction.CommitAsync(cancellationToken);
         return rows;
     }
-
-    [GeneratedRegex("^[a-z_][a-z0-9_]{0,62}$")]
-    private static partial Regex RoleName();
 }

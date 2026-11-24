@@ -51,9 +51,7 @@ public sealed class CreateServiceRequestHandler(
     ICategoryReplicaRepository categories,
     ITenantStatusReplicaRepository tenantStatuses,
     IOutbox outbox,
-    IGeocoder geocoder,
-    ILocalityCatalog localities,
-    CoverageArea coverageArea,
+    ServiceLocationResolver locations,
     TimeProvider clock)
 {
     public async Task<CreateServiceRequestResult> HandleAsync(
@@ -65,9 +63,9 @@ public sealed class CreateServiceRequestHandler(
         if (location is null)
         {
             // Primero el resto de los campos: no se geocodifica una solicitud que de todas formas se rechazaría.
-            DomainServiceRequest.ValidateFieldsWithoutLocation(
+            ServiceRequestRules.ValidateFieldsWithoutLocation(
                 command.TenantId, command.ClientId, command.CategoryId, command.Description, command.AddressText, command.CompanyId, command.SiteName);
-            var geocoded = await geocoder.GeocodeAsync(command.AddressText!.Trim(), cancellationToken);
+            var geocoded = await locations.GeocodeAsync(command.AddressText!.Trim(), cancellationToken);
             if (geocoded is null)
             {
                 return new CreateServiceRequestResult.AddressNotFound();
@@ -88,8 +86,7 @@ public sealed class CreateServiceRequestHandler(
             command.CompanyId,
             command.SiteName);
 
-        if (!coverageArea.Contains(serviceRequest.Location)
-            || await localities.FindContainingAsync(serviceRequest.Location, cancellationToken) is null)
+        if (await locations.FindLocalityAsync(serviceRequest.Location, cancellationToken) is null)
         {
             return new CreateServiceRequestResult.OutOfCoverage();
         }
